@@ -133,10 +133,11 @@
       statusContainer.textContent = 'שולח נתונים...';
       statusContainer.className = 'status-msg';
 
-      const formData = {
-        name: document.getElementById('name').value,
-        date: document.getElementById('date').value
-      };
+     const formData = {
+  action: 'add',
+  name: document.getElementById('name').value,
+  date: document.getElementById('date').value
+};
 
       try {
         await fetch(GAS_URL, {
