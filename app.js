@@ -4,6 +4,33 @@ let currentTab = 'future';
 let editingId = null;
 let detectedEventInfo = { isHoliday: false, eventName: '' };
 
+// חישוב טווח תאריכים וימים (אפשרות א')
+function formatDateRange(dateStr) {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-');
+  const dateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+  const dayOfWeek = dateObj.getDay();
+  const daysNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+
+  if (dayOfWeek === 5) { // שישי
+    const satObj = new Date(dateObj);
+    satObj.setDate(satObj.getDate() + 1);
+    const satD = String(satObj.getDate()).padStart(2, '0');
+    const satM = String(satObj.getMonth() + 1).padStart(2, '0');
+    const satY = satObj.getFullYear();
+    return `שישי - שבת: ${d}/${m}/${y} - ${satD}/${satM}/${satY}`;
+  } else if (dayOfWeek === 6) { // שבת
+    const friObj = new Date(dateObj);
+    friObj.setDate(friObj.getDate() - 1);
+    const friD = String(friObj.getDate()).padStart(2, '0');
+    const friM = String(friObj.getMonth() + 1).padStart(2, '0');
+    const friY = friObj.getFullYear();
+    return `שישי - שבת: ${friD}/${friM}/${friY} - ${d}/${m}/${y}`;
+  } else {
+    return `יום ${daysNames[dayOfWeek]}: ${d}/${m}/${y}`;
+  }
+}
+
 // 1. לוגיקת תיקוף תאריכים מול Hebcal
 async function validateDateInput(dateStr) {
   const errorEl = document.getElementById('dateError');
@@ -13,11 +40,11 @@ async function validateDateInput(dateStr) {
 
   if (!dateStr) return;
 
-  const dateObj = new Date(dateStr);
-  const dayOfWeek = dateObj.getDay(); // 5 = שישי, 6 = שבת
+  const [y, m, d] = dateStr.split('-');
+  const dateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+  const dayOfWeek = dateObj.getDay();
 
   try {
-    // בדיקת חג מול Hebcal
     const hebcalUrl = `https://www.hebcal.com/hebcal?v=1&cfg=json&start=${dateStr}&end=${dateStr}&maj=on&min=on&mod=on&nx=on`;
     const res = await fetch(hebcalUrl);
     const data = await res.json();
@@ -25,16 +52,14 @@ async function validateDateInput(dateStr) {
 
     if (holidayItem) {
       detectedEventInfo = { isHoliday: true, eventName: holidayItem.hebrew, dayOfWeek };
-      return; // חג מאושר מידית
+      return;
     }
 
-    // בדיקת סוף שבוע (שישי/שבת)
     if (dayOfWeek === 5 || dayOfWeek === 6) {
       detectedEventInfo = { isHoliday: false, eventName: '', dayOfWeek };
-      return; // סופ"ש מאושר
+      return;
     }
 
-    // חסימת ימי חול
     errorEl.innerText = "ניתן לבחור ימי שישי, שבת או ימי חג בלבד.";
     errorEl.style.display = 'block';
     submitBtn.disabled = true;
@@ -72,8 +97,7 @@ async function handleFormSubmit(e) {
     try {
       data = JSON.parse(rawText);
     } catch (parseError) {
-      console.error("Server HTML Response:", rawText);
-      alert("השרת החזיר תשובת HTML במקום JSON. ודא שהרשאות הפריסה ב-GAS מוגדרות ל-Anyone ושיצרת New Version.");
+      alert("השרת החזיר תשובת HTML במקום JSON. ודא שהרשאות הפריסה ב-GAS מוגדרות ל-Anyone.");
       return;
     }
 
@@ -85,7 +109,6 @@ async function handleFormSubmit(e) {
       alert("שגיאה מהשרת: " + (data.message || "לא ניתן לשמור"));
     }
   } catch (err) {
-    console.error("Network Error:", err);
     alert("שגיאה בתקשורת מול השרת: " + err.message);
   }
 }
@@ -115,7 +138,8 @@ function showWhatsAppShare(name, dateStr, eventInfo) {
 
 // 4. חישוב תאריך תפוגה והתראות עבור אירוע מול Hebcal
 async function calculateEventExpiration(dateStr) {
-  const startDate = new Date(dateStr);
+  const [y, m, d] = dateStr.split('-');
+  const startDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
   let expDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 23, 59, 59);
   let alertNotice = "";
   let isHolidaySequence = false;
@@ -134,7 +158,7 @@ async function calculateEventExpiration(dateStr) {
 
     for (let i = 0; i < 5; i++) {
       const curStr = checkDate.toISOString().split('T')[0];
-      const dayOfWeek = checkDate.getDay(); // 5 = שישי, 6 = שבת
+      const dayOfWeek = checkDate.getDay();
 
       const dayItems = items.filter(it => it.date.startsWith(curStr));
       const isYomTov = dayItems.some(it => it.category === 'holiday' && it.yomtov === true);
@@ -212,16 +236,14 @@ async function renderCards() {
     const tagsHtml = await getCardTagsHtml(item.date, item.eventName);
 
     card.innerHTML = `
-      <div class="card-header">
-        <span class="card-title">${item.name}</span>
-        <div>${tagsHtml}</div>
+      <div class="card-main-info">
+        <div class="card-title">${item.name}</div>
+        <div class="card-date">${formatDateRange(item.date)}</div>
+        <div class="card-tags">${tagsHtml}</div>
+        ${item.alertNotice && currentTab === 'future' ? `
+          <div class="card-alert">${item.alertNotice}</div>
+        ` : ''}
       </div>
-      <div style="margin-top: 8px; color: #555;">📅 תאריך: ${item.date}</div>
-      ${item.alertNotice && currentTab === 'future' ? `
-        <div style="margin-top: 8px; background-color: #FFF3CD; color: #856404; padding: 6px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold;">
-          ${item.alertNotice}
-        </div>
-      ` : ''}
       ${currentTab === 'future' ? `
         <div class="card-actions">
           <button class="btn-edit" onclick="startEdit('${item.id}', '${item.name}', '${item.date}')">עריכה</button>
@@ -234,18 +256,18 @@ async function renderCards() {
 
 // 6. שליפת תגיות דינמית לפי תרחישים
 async function getCardTagsHtml(dateStr, savedEventName) {
-  const dateObj = new Date(dateStr);
+  const [y, m, d] = dateStr.split('-');
+  const dateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
   const dayOfWeek = dateObj.getDay();
 
+  let tags = '';
+
   if (savedEventName) {
-    if (dayOfWeek === 5 || dayOfWeek === 6) {
-      return `<span class="tag">🕯️ שבת</span><span class="tag">🥂 ${savedEventName}</span>`;
-    }
-    return `<span class="tag">🥂 ${savedEventName}</span>`;
+    tags += `<span class="tag tag-secondary">${savedEventName} 🍷</span>`;
   }
 
   if (dayOfWeek === 5 || dayOfWeek === 6) {
-    const saturdayDate = dayOfWeek === 5 ? new Date(dateObj.setDate(dateObj.getDate() + 1)) : dateObj;
+    const saturdayDate = dayOfWeek === 5 ? new Date(new Date(dateObj).setDate(dateObj.getDate() + 1)) : dateObj;
     const satStr = saturdayDate.toISOString().split('T')[0];
     
     try {
@@ -253,13 +275,15 @@ async function getCardTagsHtml(dateStr, savedEventName) {
       const data = await res.json();
       const parashaItem = data.items && data.items.find(i => i.category === 'parashat');
       const parashaName = parashaItem ? parashaItem.hebrew : 'שבת';
-      return `<span class="tag">📖 ${parashaName}</span>`;
+      tags += `<span class="tag tag-primary">${parashaName} 🕯️</span>`;
     } catch (e) {
-      return `<span class="tag">🕯️ שבת</span>`;
+      tags += `<span class="tag tag-primary">שבת 🕯️</span>`;
     }
+  } else if (!savedEventName) {
+    tags += `<span class="tag tag-primary">סופ״ש 📅</span>`;
   }
 
-  return `<span class="tag">📅 סופ״ש</span>`;
+  return tags;
 }
 
 // 7. ניהול מצבי טופס
