@@ -235,13 +235,21 @@ async function handleFormSubmit(e) {
   try {
     const res = await fetch(GAS_URL, { 
       method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8' // מונע בקשת OPTIONS Preflight של הדפדפן
-      },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload) 
     });
 
-    const data = await res.json();
+    // קריאה ראשונית כטקסט למניעת שגיאת JSON Parsing
+    const rawText = await res.text();
+    let data;
+
+    try {
+      data = JSON.parse(rawText);
+    } catch (parseError) {
+      console.error("Server HTML Response:", rawText);
+      alert("השרת החזיר תשובת HTML במקום JSON. ודא שהרשאות הפריסה ב-GAS מוגדרות ל-Anyone ושיצרת New Version.");
+      return;
+    }
 
     if (data.status === 'success') {
       showWhatsAppShare(name, date, detectedEventInfo);
@@ -251,8 +259,8 @@ async function handleFormSubmit(e) {
       alert("שגיאה מהשרת: " + (data.message || "לא ניתן לשמור"));
     }
   } catch (err) {
-    console.error("Error details:", err);
-    alert("שגיאה בשמירת הנתונים: " + err.message); // יציג את פירוט השגיאה המדויק
+    console.error("Network Error:", err);
+    alert("שגיאה בתקשורת מול השרת: " + err.message);
   }
 }
 
