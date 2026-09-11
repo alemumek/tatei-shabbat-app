@@ -6,293 +6,120 @@
   <title>שבת וחג אצל טטיי 🕯️🕯️🍷</title>
   <style>
     :root {
-      --primary: #2D5A27;        /* ירוק זית עמוק */
-      --accent-gold: #D4AF37;    /* זהב חם */
-      --edit-mode: #C05621;      /* טרקוטה */
-      --whatsapp: #128C7E;       /* ירוק אמרלד */
-      --parasha-tag: #9A7B38;    /* חום-זהוב */
-      --holiday-tag: #800020;    /* בורדו יין */
-      --bg-color: #F9F9F6;
-      --card-bg: #FFFFFF;
-      --text-color: #2C3E50;
-      --border-radius: 12px;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      --primary-color: #2c3e50;
+      --accent-color: #d4af37;
+      --bg-color: #f8f9fa;
+      --card-bg: #ffffff;
+      --text-color: #333333;
+      --error-color: #e74c3c;
+      --success-color: #2ecc71;
     }
 
     body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background-color: var(--bg-color);
       color: var(--text-color);
-      line-height: 1.5;
-      padding: 16px;
+      margin: 0;
+      padding: 20px;
+      direction: rtl;
+    }
+
+    .container {
       max-width: 600px;
       margin: 0 auto;
-    }
-
-    header {
-      text-align: center;
-      margin-bottom: 20px;
-      padding-bottom: 12px;
-      border-bottom: 2px solid var(--accent-gold);
-    }
-
-    header h1 {
-      color: var(--primary);
-      font-size: 1.6rem;
-      margin-bottom: 4px;
-    }
-
-    header p {
-      font-size: 0.9rem;
-      color: #666;
-    }
-
-    /* טופס הרשמה */
-    .form-card {
       background: var(--card-bg);
-      border-radius: var(--border-radius);
-      padding: 18px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-      border: 2px solid var(--primary);
-      margin-bottom: 24px;
-      transition: border-color 0.3s ease;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     }
 
-    .form-card.edit-mode {
-      border-color: var(--edit-mode);
-    }
-
-    .edit-banner {
-      display: none;
-      background-color: var(--edit-mode);
-      color: white;
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 0.85rem;
-      font-weight: bold;
-      margin-bottom: 12px;
+    h1 {
       text-align: center;
+      color: var(--primary-color);
+      margin-bottom: 25px;
     }
 
     .form-group {
-      margin-bottom: 14px;
+      margin-bottom: 20px;
     }
 
-    .form-group label {
+    label {
       display: block;
-      font-weight: 600;
-      margin-bottom: 6px;
-      font-size: 0.9rem;
-    }
-
-    .form-group input {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid #CCC;
-      border-radius: 8px;
-      font-size: 1rem;
-      outline: none;
-    }
-
-    .form-card.edit-mode input:focus {
-      border-color: var(--edit-mode);
-    }
-
-    .form-group input:focus {
-      border-color: var(--primary);
-    }
-
-    .status-msg {
-      font-size: 0.85rem;
-      margin-top: 4px;
-      font-weight: 600;
-    }
-    .status-msg.error { color: #E53E3E; }
-    .status-msg.success { color: var(--primary); }
-    .status-msg.info { color: #3182CE; }
-
-    .btn-group {
-      display: flex;
-      gap: 10px;
-    }
-
-    .btn {
-      flex: 1;
-      padding: 12px;
-      border: none;
-      border-radius: 8px;
-      font-size: 1rem;
+      margin-bottom: 8px;
       font-weight: bold;
+      color: var(--primary-color);
+    }
+
+    input[type="text"],
+    input[type="date"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box;
+      font-size: 16px;
+    }
+
+    /* תיקון כיווניות שדה התאריך */
+    input[type="date"] {
+      direction: ltr;
+      text-align: right;
+    }
+
+    button {
+      width: 100%;
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      padding: 14px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 6px;
       cursor: pointer;
-      text-align: center;
       transition: background-color 0.2s;
     }
 
-    .btn-primary {
-      background-color: var(--primary);
-      color: white;
+    button:hover {
+      background-color: #1a252f;
     }
 
-    .form-card.edit-mode .btn-primary {
-      background-color: var(--edit-mode);
+    .status-msg {
+      margin-top: 8px;
+      font-size: 14px;
     }
 
-    .btn-cancel {
-      display: none;
-      background-color: #718096;
-      color: white;
+    .status-msg.error {
+      color: var(--error-color);
     }
 
-    /* תיבת שיתוף בוואטסאפ */
-    .share-box {
-      display: none;
-      background-color: #E6F4EA;
-      border: 1px solid var(--whatsapp);
-      border-radius: var(--border-radius);
-      padding: 14px;
-      margin-bottom: 24px;
-      text-align: center;
+    .status-msg.success {
+      color: var(--success-color);
     }
 
-    .share-box p {
-      font-size: 0.9rem;
-      margin-bottom: 10px;
-      color: #2D3748;
+    #loading, #registrationsList {
+      margin-top: 20px;
     }
 
-    .btn-whatsapp {
-      background-color: var(--whatsapp);
-      color: white;
-      text-decoration: none;
-      display: inline-block;
-      width: 100%;
-      padding: 10px;
+    .registration-card {
+      background: #f1f3f5;
+      padding: 15px;
       border-radius: 8px;
-      font-weight: bold;
-    }
-
-    /* לשוניות (Tabs) */
-    .tabs {
-      display: flex;
-      border-bottom: 2px solid #E2E8F0;
-      margin-bottom: 16px;
-    }
-
-    .tab-btn {
-      flex: 1;
-      padding: 10px;
-      background: none;
-      border: none;
-      font-weight: bold;
-      color: #718096;
-      cursor: pointer;
-      border-bottom: 3px solid transparent;
-      margin-bottom: -2px;
-    }
-
-    .tab-btn.active {
-      color: var(--primary);
-      border-bottom-color: var(--primary);
-    }
-
-    /* כרטיסי הרשמה */
-    .cards-container {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .card {
-      background: var(--card-bg);
-      border-radius: var(--border-radius);
-      padding: 14px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.04);
-      border-right: 4px solid var(--primary);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .history-view .card {
-      opacity: 0.65;
-      border-right-color: #A0AEC0;
-      background: #EDF2F7;
-    }
-
-    .card-info {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .card-name {
-      font-weight: bold;
-      font-size: 1.05rem;
-    }
-
-    .card-date {
-      font-size: 0.85rem;
-      color: #4A5568;
-    }
-
-    .tags-container {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      margin-top: 4px;
-    }
-
-    .tag {
-      font-size: 0.75rem;
-      padding: 2px 8px;
-      border-radius: 12px;
-      color: white;
-      font-weight: 600;
-    }
-
-    .tag-shabbat { background-color: var(--primary); }
-    .tag-holiday { background-color: var(--holiday-tag); }
-    .tag-parasha { background-color: var(--parasha-tag); }
-
-    .btn-edit {
-      background-color: transparent;
-      border: 1px solid var(--primary);
-      color: var(--primary);
-      padding: 6px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.85rem;
-      font-weight: bold;
-    }
-
-    .loading-spinner {
-      text-align: center;
-      padding: 20px;
-      color: #718096;
+      margin-bottom: 10px;
+      border-right: 4px solid var(--accent-color);
     }
   </style>
 </head>
 <body>
 
-  <header>
-    <h1>שבת וחג אצל טטיי 🕯️</h1>
-    <p>סנכרון והרשמה למשפחת מלקו</p>
-  </header>
-
-  <!-- טופס הרשמה / עריכה -->
-  <div class="form-card" id="formCard">
-    <div class="edit-banner" id="editBanner">מצב עריכת הרשמה פעיל</div>
-    <form id="regForm">
-      <input type="hidden" id="editId">
-      <input type="hidden" id="detectedEventName">
-
+  <div class="container">
+    <h1>שבת וחג אצל טטיי 🕯️🕯️🍷</h1>
+    
+    <form id="registrationForm">
       <div class="form-group">
-        <label for="name">שם המשפחה / הזוג:</label>
+        <label for="name">שם מלא / משפחה:</label>
         <input type="text" id="name" required placeholder="אדיסה ודסטאו">
       </div>
 
@@ -302,402 +129,108 @@
         <div id="dateStatus" class="status-msg"></div>
       </div>
 
-      <div class="btn-group">
-        <button type="submit" class="btn btn-primary" id="submitBtn">אישור הרשמה</button>
-        <button type="button" class="btn btn-cancel" id="cancelBtn">ביטול</button>
+      <div class="form-group">
+        <label for="guests">מספר משתתפים:</label>
+        <input type="number" id="guests" min="1" value="1" required>
       </div>
+
+      <div class="form-group">
+        <label for="notes">הערות נוספות:</label>
+        <textarea id="notes" rows="3" placeholder="כשרות, העדפות מזון וכו'"></textarea>
+      </div>
+
+      <button type="submit" id="submitBtn">אישור הרשמה</button>
     </form>
-  </div>
 
-  <!-- תיבת שיתוף בוואטסאפ -->
-  <div class="share-box" id="shareBox">
-    <p>✨ ההרשמה שנשמרה התעדכנה בהצלחה!</p>
-    <a href="#" target="_blank" class="btn-whatsapp" id="waLink">שתף בקבוצת ה-WhatsApp המשפחתית</a>
-  </div>
+    <div id="statusContainer" class="status-msg"></div>
 
-  <!-- מערכת בלשיות (Tabs) -->
-  <div class="tabs">
-    <button class="tab-btn active" id="tabFuture">שבתות וחגים קרובים</button>
-    <button class="tab-btn" id="tabHistory">היסטוריית הרשמות</button>
-  </div>
+    <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
 
-  <!-- רשימת הרשמות -->
-  <div id="loading" class="loading-spinner">טוען נתונים...</div>
-  <div class="cards-container" id="cardsContainer"></div>
+    <h2>נרשמו עד כה</h2>
+    <div id="loading">טוען נתונים...</div>
+    <div id="registrationsList"></div>
+  </div>
 
   <script>
-    // כתובת ה-Web App מ-Google Apps Script (נא להחליף בקישור מ-GAS)
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbyeLEhyGVsbe_1eMbFDAXDCV5x9OOPw9jvzspdSsPbqDzS3pn0ZIPp5qiSd7ZQ89vO6/exec';
+    // יש להדביק כאן את הקישור מ-Google Apps Script (המסתניים ב-/exec)
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyeLEhyGVsbe_1eMbFDAXDCV5x9OOPw9jvzspdSsPbqDzS3pn0ZIPp5qiSd7ZQ89vO6/exec";
 
-    // State Management
-    let allRegistrations = [];
-    let currentTab = 'future'; // 'future' | 'history'
-    let parashaCache = {};     // מטמון לפרשות שבוע
+    const form = document.getElementById('registrationForm');
+    const statusContainer = document.getElementById('statusContainer');
+    const registrationsList = document.getElementById('registrationsList');
+    const loadingDiv = document.getElementById('loading');
 
-    // האלמנטים בממשק
-    const formCard = document.getElementById('formCard');
-    const editBanner = document.getElementById('editBanner');
-    const regForm = document.getElementById('regForm');
-    const editIdInput = document.getElementById('editId');
-    const eventNameInput = document.getElementById('detectedEventName');
-    const nameInput = document.getElementById('name');
-    const dateInput = document.getElementById('date');
-    const dateStatus = document.getElementById('dateStatus');
-    const submitBtn = document.getElementById('submitBtn');
-    const cancelBtn = document.getElementById('cancelBtn');
-    const shareBox = document.getElementById('shareBox');
-    const waLink = document.getElementById('waLink');
-    const tabFuture = document.getElementById('tabFuture');
-    const tabHistory = document.getElementById('tabHistory');
-    const cardsContainer = document.getElementById('cardsContainer');
-    const loadingEl = document.getElementById('loading');
+    // טעינת רשימת הנרשמים ברענון הדף
+    document.addEventListener('DOMContentLoaded', fetchRegistrations);
 
-    // הגדרת מינימום תאריך להיום
-    const todayStr = formatLocalYYYYMMDD(new Date());
-    dateInput.min = todayStr;
-
-    // --- 1. עזרי תאריכים למניעת עיוותי אזור זמן (UTC) ---
-    function parseLocalDate(dateStr) {
-      if (!dateStr) return null;
-      const parts = dateStr.split('-');
-      return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-    }
-
-    function formatLocalYYYYMMDD(d) {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-
-    function formatDateDisplay(dateStr) {
-      const d = parseLocalDate(dateStr);
-      if (!d) return dateStr;
-      return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-    }
-
-    // --- 2. בדיקת תאריכים 3-שלבית מול Hebcal ---
-    async function validateSelectedDate(dateVal) {
-      if (!dateVal) return false;
-      dateStatus.textContent = 'בודק תאריך...';
-      dateStatus.className = 'status-msg info';
-
-      try {
-        // שלב 1: בדיקת חג מול Hebcal
-        const hebcalUrl = `https://www.hebcal.com/hebcal?v=1&cfg=json&start=${dateVal}&end=${dateVal}&v=1&maj=on&min=on&mod=on`;
-        const res = await fetch(hebcalUrl);
-        const data = await res.json();
-
-        const holidayItem = data.items ? data.items.find(i => i.category === 'holiday') : null;
-
-        if (holidayItem) {
-          const hName = holidayItem.hebrew || holidayItem.title;
-          eventNameInput.value = hName;
-          dateStatus.textContent = `🥂 זוהה חג: ${hName}`;
-          dateStatus.className = 'status-msg success';
-          return true;
-        }
-
-        // שלב 2: בדיקת סוף שבוע (שישי/שבת)
-        const localD = parseLocalDate(dateVal);
-        const day = localD.getDay(); // 5 = שישי, 6 = שבת
-
-        if (day === 5 || day === 6) {
-          eventNameInput.value = '';
-          dateStatus.textContent = '📅 תאריך סוף שבוע תקין';
-          dateStatus.className = 'status-msg success';
-          return true;
-        }
-
-        // שלב 3: חסימת יום חול שאינו חג
-        eventNameInput.value = '';
-        dateStatus.textContent = 'ניתן לבחור ימי שישי, שבת או ימי חג בלבד.';
-        dateStatus.className = 'status-msg error';
-        dateInput.value = '';
-        return false;
-
-      } catch (err) {
-        // Fallback במקרה של שגיאת תקשורת
-        const localD = parseLocalDate(dateVal);
-        const day = localD.getDay();
-        if (day === 5 || day === 6) {
-          eventNameInput.value = '';
-          dateStatus.textContent = '📅 תאריך סוף שבוע תקין';
-          dateStatus.className = 'status-msg success';
-          return true;
-        } else {
-          dateStatus.textContent = 'ניתן לבחור ימי שישי, שבת או ימי חג בלבד.';
-          dateStatus.className = 'status-msg error';
-          dateInput.value = '';
-          return false;
-        }
-      }
-    }
-
-    dateInput.addEventListener('change', (e) => validateSelectedDate(e.target.value));
-
-    // --- 3. טעינת פרשת השבוע לתאריך שבת (תרחיש 3) ---
-    async function fetchParashaForSaturday(satDateStr) {
-      if (parashaCache[satDateStr]) return parashaCache[satDateStr];
-      try {
-        const url = `https://www.hebcal.com/hebcal?v=1&cfg=json&s=on&start=${satDateStr}&end=${satDateStr}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        const pItem = data.items ? data.items.find(i => i.category === 'parashat') : null;
-        if (pItem) {
-          parashaCache[satDateStr] = pItem.hebrew || pItem.title;
-          return parashaCache[satDateStr];
-        }
-      } catch (e) {
-        console.error('Error fetching parasha:', e);
-      }
-      return null;
-    }
-
-    // --- 4. טעינת נתונים מהשרת ---
-    async function loadRegistrations() {
-      loadingEl.style.display = 'block';
-      cardsContainer.innerHTML = '';
-      try {
-        const res = await fetch(GAS_URL);
-        const result = await res.json();
-        if (result.status === 'success') {
-          allRegistrations = result.data;
-          await renderCards();
-        }
-      } catch (err) {
-        cardsContainer.innerHTML = '<p style="text-align:center; color:red;">שגיאה בטעינת הנתונים.</p>';
-      } finally {
-        loadingEl.style.display = 'none';
-      }
-    }
-
-    // --- 5. רינדור כרטיסי הרשמה לפי 3 התרחישים באיפיון ---
-    async function renderCards() {
-      cardsContainer.innerHTML = '';
-      const today = parseLocalDate(todayStr);
-
-      // סינון לפי בלשונית הפעילה
-      let filtered = allRegistrations.filter(item => {
-        const itemD = parseLocalDate(item.date);
-        if (!itemD) return false;
-        return currentTab === 'future' ? itemD >= today : itemD < today;
-      });
-
-      // מיון: מהקרוב לרחוק ב-Future, מהחדש לישן ב-History
-      filtered.sort((a, b) => {
-        const dA = parseLocalDate(a.date);
-        const dB = parseLocalDate(b.date);
-        return currentTab === 'future' ? dA - dB : dB - dA;
-      });
-
-      if (filtered.length === 0) {
-        cardsContainer.innerHTML = `<p style="text-align:center; color:#718096; padding:20px;">
-          ${currentTab === 'future' ? 'אין הרשמות עתידיות קרובות.' : 'אין הרשמות קודמות.'}
-        </p>`;
-        return;
-      }
-
-      for (const item of filtered) {
-        const card = document.createElement('div');
-        card.className = 'card';
-
-        const localD = parseLocalDate(item.date);
-        const day = localD ? localD.getDay() : -1;
-        const isWeekend = (day === 5 || day === 6);
-        const hasHoliday = Boolean(item.eventName && item.eventName.trim() !== '');
-
-        let tagsHTML = '';
-
-        if (hasHoliday && isWeekend) {
-          // תרחיש 1: חג בסוף שבוע -> תגית שבת + תגית חג (ללא קריאה לפרשה)
-          tagsHTML += `<span class="tag tag-shabbat">🕯️ שבת</span>`;
-          tagsHTML += `<span class="tag tag-holiday">🥂 ${item.eventName}</span>`;
-
-        } else if (hasHoliday && !isWeekend) {
-          // תרחיש 2: חג ביום חול -> תגית חג בלבד
-          tagsHTML += `<span class="tag tag-holiday">🥂 ${item.eventName}</span>`;
-
-        } else if (!hasHoliday && isWeekend) {
-          // תרחיש 3: סוף שבוע רגיל -> קריאה לפרשת השבוע
-          let satD = new Date(localD);
-          if (day === 5) satD.setDate(satD.getDate() + 1); // מעבר ליום שבת במידה ונבחר שישי
-          const satStr = formatLocalYYYYMMDD(satD);
-
-          const parashaName = await fetchParashaForSaturday(satStr);
-          if (parashaName) {
-            tagsHTML += `<span class="tag tag-parasha">📖 שבת ${parashaName}</span>`;
-          } else {
-            tagsHTML += `<span class="tag tag-shabbat">🕯️ שבת</span>`;
-          }
-        }
-
-        const editBtnHTML = currentTab === 'future' 
-          ? `<button class="btn-edit" onclick="startEdit('${item.id}')">עריכה</button>` 
-          : '';
-
-        card.innerHTML = `
-          <div class="card-info">
-            <div class="card-name">${item.name}</div>
-            <div class="card-date">📅 ${formatDateDisplay(item.date)}</div>
-            <div class="tags-container">${tagsHTML}</div>
-          </div>
-          ${editBtnHTML}
-        `;
-
-        cardsContainer.appendChild(card);
-      }
-
-      if (currentTab === 'history') {
-        cardsContainer.classList.add('history-view');
-      } else {
-        cardsContainer.classList.remove('history-view');
-      }
-    }
-
-    // --- 6. ניהול מצבי עריכה וטופס ---
-    window.startEdit = function(id) {
-      const item = allRegistrations.find(r => r.id === id);
-      if (!item) return;
-
-      editIdInput.value = item.id;
-      nameInput.value = item.name;
-      dateInput.value = item.date;
-      eventNameInput.value = item.eventName || '';
-
-      formCard.classList.add('edit-mode');
-      editBanner.style.display = 'block';
-      submitBtn.textContent = 'עדכן הרשמה';
-      cancelBtn.style.display = 'block';
-
-      validateSelectedDate(item.date);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-
-    function resetForm() {
-      editIdInput.value = '';
-      eventNameInput.value = '';
-      regForm.reset();
-      dateInput.min = todayStr;
-      dateStatus.textContent = '';
-      
-      formCard.classList.remove('edit-mode');
-      editBanner.style.display = 'none';
-      submitBtn.textContent = 'אישור הרשמה';
-      cancelBtn.style.display = 'none';
-    }
-
-    cancelBtn.addEventListener('click', resetForm);
-
-    // --- 7. שמירה / עדכון ושליחה מותאמת מול GitHub Pages (מניעת חסימת CORS) ---
-    regForm.addEventListener('submit', async (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      statusContainer.textContent = 'שולח נתונים...';
+      statusContainer.className = 'status-msg';
 
-      const name = nameInput.value.trim();
-      const date = dateInput.value;
-      const eventName = eventNameInput.value;
-      const editId = editIdInput.value;
-
-      if (!name || !date) return;
-
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'שומר...';
-
-      const payload = {
-        action: editId ? 'update' : 'add',
-        id: editId || new Date().getTime().toString(),
-        name: name,
-        date: date,
-        eventName: eventName
+      const formData = {
+        name: document.getElementById('name').value,
+        date: document.getElementById('date').value,
+        guests: document.getElementById('guests').value,
+        notes: document.getElementById('notes').value
       };
 
       try {
-        // שליחה עם Content-Type: text/plain עוקפת את מנגנון Preflight (OPTIONS) ב-CORS מול GAS
         await fetch(GAS_URL, {
           method: 'POST',
+          mode: 'no-cors',
           headers: {
-            'Content-Type': 'text/plain;charset=utf-8'
+            'Content-Type': 'application/json'
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(formData)
         });
 
-        // יצירת הודעת WhatsApp מותאמת
-        const msg = generateWAMessage(name, date, eventName);
-        waLink.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
-        shareBox.style.display = 'block';
-
-        resetForm();
-        await loadRegistrations();
-
-      } catch (err) {
-        alert('אירעה שגיאה בשמירת הנתונים. אנא נסה שוב.');
-      } finally {
-        submitBtn.disabled = false;
+        statusContainer.textContent = 'ההרשמה נקלטה בהצלחה!';
+        statusContainer.className = 'status-msg success';
+        form.reset();
+        fetchRegistrations();
+      } catch (error) {
+        console.error('Error:', error);
+        statusContainer.textContent = 'אירעה שגיאה בשליחת הנתונים. אנא נסה שנית.';
+        statusContainer.className = 'status-msg error';
       }
     });
 
-    function generateWAMessage(name, dateStr, eventName) {
-      const localD = parseLocalDate(dateStr);
-      const day = localD.getDay();
-      const isWeekend = (day === 5 || day === 6);
-      const hasHoliday = Boolean(eventName && eventName.trim() !== '');
-
-      const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-
-      // חישוב טווח תאריכים לסופ"ש (שישי-שבת)
-      let friD, satD;
-      if (day === 5) {
-        friD = localD;
-        satD = new Date(localD); satD.setDate(satD.getDate() + 1);
-      } else if (day === 6) {
-        satD = localD;
-        friD = new Date(localD); friD.setDate(friD.getDate() - 1);
+    async function fetchRegistrations() {
+      if (!GAS_URL || GAS_URL === "YOUR_GOOGLE_APPS_SCRIPT_URL_HERE") {
+        loadingDiv.textContent = 'נא להגדיר כתובת GAS_URL תקינה בקוד.';
+        return;
       }
 
-      let weekendRangeStr = '';
-      if (friD && satD) {
-        weekendRangeStr = `${String(friD.getDate()).padStart(2, '0')}-${String(satD.getDate()).padStart(2, '0')}/${String(friD.getMonth() + 1).padStart(2, '0')}/${friD.getFullYear()}`;
+      loadingDiv.style.display = 'block';
+      try {
+        const response = await fetch(GAS_URL);
+        if (!response.ok) throw new Error('Network response failure');
+        const data = await response.json();
+        
+        loadingDiv.style.display = 'none';
+        registrationsList.innerHTML = '';
+
+        if (data && data.length > 0) {
+          data.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'registration-card';
+            card.innerHTML = `
+              <strong>${item.name}</strong> (${item.guests} משתתפים)<br>
+              <small>תאריך: ${item.date}</small>
+              ${item.notes ? `<br><small>הערות: ${item.notes}</small>` : ''}
+            `;
+            registrationsList.appendChild(card);
+          });
+        } else {
+          registrationsList.innerHTML = '<p>עדיין אין נרשמים.</p>';
+        }
+      } catch (error) {
+        console.error('Fetch error:', error);
+        loadingDiv.textContent = 'שגיאה בטעינת הנתונים. ודא שההרשאות ב-Apps Script מוגדרות ל-Anyone.';
+        loadingDiv.className = 'status-msg error';
       }
-
-      const singleDateStr = formatDateDisplay(dateStr);
-      let eventDetail = '';
-
-      if (hasHoliday && isWeekend) {
-        eventDetail = `🥂 שבת וחג: ${eventName} (${weekendRangeStr || singleDateStr})`;
-      } else if (hasHoliday && !isWeekend) {
-        eventDetail = `🥂 חג: ${eventName} (יום ${dayNames[day]}, ${singleDateStr})`;
-      } else {
-        eventDetail = `📅 סופ״ש: ${weekendRangeStr || singleDateStr}`;
-      }
-
-      const appLink = window.location.href;
-
-      return `מה נשמע שבט מלקו? ✨
-לידיעתכם 📌
-רשימת שבת/חג אצל טטיי התעדכנה 🌾
-👨‍👩‍👧‍👦 משפחה: ${name}
-${eventDetail}
-🔗 לצפייה והרשמה: ${appLink}
-המשך יום נפלא! 😃`;
     }
-
-    // --- 8. ניהול בלשיות (Tabs) ---
-    tabFuture.addEventListener('click', () => {
-      tabFuture.classList.add('active');
-      tabHistory.classList.remove('active');
-      currentTab = 'future';
-      renderCards();
-    });
-
-    tabHistory.addEventListener('click', () => {
-      tabHistory.classList.add('active');
-      tabFuture.classList.remove('active');
-      currentTab = 'history';
-      renderCards();
-    });
-
-    // טעינה ראשונית של המערכת
-    loadRegistrations();
   </script>
 </body>
 </html>
