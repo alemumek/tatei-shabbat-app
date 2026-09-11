@@ -218,33 +218,43 @@
   }
 
   // 2. שליחת הטופס (הוספה / עדכון)
-  async function handleFormSubmit(e) {
-    e.preventDefault();
-    const name = document.getElementById('name').value;
-    const date = document.getElementById('date').value;
-    
-    const action = editingId ? 'update' : 'add';
-    const payload = {
-      action: action,
-      id: editingId,
-      name: name,
-      date: date,
-      eventName: detectedEventInfo.eventName || ''
-    };
+async function handleFormSubmit(e) {
+  e.preventDefault();
+  const name = document.getElementById('name').value;
+  const date = document.getElementById('date').value;
+  
+  const action = editingId ? 'update' : 'add';
+  const payload = {
+    action: action,
+    id: editingId,
+    name: name,
+    date: date,
+    eventName: detectedEventInfo.eventName || ''
+  };
 
-    try {
-      const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) });
-      const data = await res.json();
+  try {
+    const res = await fetch(GAS_URL, { 
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8' // מונע בקשת OPTIONS Preflight של הדפדפן
+      },
+      body: JSON.stringify(payload) 
+    });
 
-      if (data.status === 'success') {
-        showWhatsAppShare(name, date, detectedEventInfo);
-        resetForm();
-        loadRegistrations();
-      }
-    } catch (err) {
-      alert("שגיאה בשמירת הנתונים");
+    const data = await res.json();
+
+    if (data.status === 'success') {
+      showWhatsAppShare(name, date, detectedEventInfo);
+      resetForm();
+      loadRegistrations();
+    } else {
+      alert("שגיאה מהשרת: " + (data.message || "לא ניתן לשמור"));
     }
+  } catch (err) {
+    console.error("Error details:", err);
+    alert("שגיאה בשמירת הנתונים: " + err.message); // יציג את פירוט השגיאה המדויק
   }
+}
 
   // 3. מחולל הודעות WhatsApp
   function showWhatsAppShare(name, dateStr, eventInfo) {
