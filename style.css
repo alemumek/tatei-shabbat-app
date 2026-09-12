@@ -67,22 +67,21 @@ button {
 .btn-cancel { background-color: #777; display: none; }
 .form-card.edit-mode .btn-cancel { display: block; }
 
-/* ניהול טאבים */
-.tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+/* ניהול לשוניות (טאבים) - הוחזר לעיצוב המקורי */
+.tabs { display: flex; border-bottom: 2px solid #ccc; margin-bottom: 15px; }
 .tab-btn {
   flex: 1;
-  background: #fff;
-  border: 1px solid #ccc;
-  border-radius: 8px;
+  background: none;
+  border: none;
   padding: 10px;
   font-size: 1rem;
   color: #666;
+  border-bottom: 3px solid transparent;
   cursor: pointer;
 }
 .tab-btn.active {
-  background-color: #4a90e2;
-  color: white;
-  border-color: #4a90e2;
+  color: var(--olive-green);
+  border-bottom-color: var(--olive-green);
   font-weight: bold;
 }
 
