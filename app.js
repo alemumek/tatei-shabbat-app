@@ -184,7 +184,7 @@ async function calculateEventExpiration(dateStr) {
     }
 
     if (isAdjacentToShabbat || (isHolidaySequence && startDate.getDay() === 5)) {
-      alertNotice = "⚡ רצף חג ושבת: ההרשמה פעילה עד מוצאי שבת";
+      alertNotice = "⚡ רצף חג ושבת";
     }
   } catch (e) {
     console.error("שגיאה בחישוב תפוגת אירוע מול Hebcal:", e);
