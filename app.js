@@ -4,7 +4,15 @@ let currentTab = 'future';
 let editingId = null;
 let detectedEventInfo = { isHoliday: false, eventName: '' };
 
-// חישוב טווח תאריכים וימים (אפשרות א')
+// פונקציית עזר: המרת אובייקט Date למחרוזת YYYY-MM-DD לפי זמן מקומי (מונעת הסטת UTC)
+function getLocalDateStr(dateObj) {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const d = String(dateObj.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// חישוב טווח תאריכים וימים להצגה בכרטיסייה
 function formatDateRange(dateStr) {
   if (!dateStr) return '';
   const [y, m, d] = dateStr.split('-');
@@ -147,7 +155,7 @@ async function calculateEventExpiration(dateStr) {
 
   const endDateObj = new Date(startDate);
   endDateObj.setDate(endDateObj.getDate() + 4);
-  const endDateStr = endDateObj.toISOString().split('T')[0];
+  const endDateStr = getLocalDateStr(endDateObj);
 
   try {
     const res = await fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&start=${dateStr}&end=${endDateStr}&maj=on&min=on`);
@@ -157,7 +165,7 @@ async function calculateEventExpiration(dateStr) {
     let checkDate = new Date(startDate);
 
     for (let i = 0; i < 5; i++) {
-      const curStr = checkDate.toISOString().split('T')[0];
+      const curStr = getLocalDateStr(checkDate);
       const dayOfWeek = checkDate.getDay();
 
       const dayItems = items.filter(it => it.date.startsWith(curStr));
@@ -268,7 +276,7 @@ async function getCardTagsHtml(dateStr, savedEventName) {
 
   if (dayOfWeek === 5 || dayOfWeek === 6) {
     const saturdayDate = dayOfWeek === 5 ? new Date(new Date(dateObj).setDate(dateObj.getDate() + 1)) : dateObj;
-    const satStr = saturdayDate.toISOString().split('T')[0];
+    const satStr = getLocalDateStr(saturdayDate);
     
     try {
       const res = await fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&start=${satStr}&end=${satStr}&s=on`);
