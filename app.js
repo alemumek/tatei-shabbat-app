@@ -1,318 +1,345 @@
-const GAS_URL = "https://script.google.com/macros/s/AKfycbyeLEhyGVsbe_1eMbFDAXDCV5x9OOPw9jvzspdSsPbqDzS3pn0ZIPp5qiSd7ZQ89vO6/exec";
-let allRegistrations = [];
-let currentTab = 'future';
-let editingId = null;
-let detectedEventInfo = { isHoliday: false, eventName: '' };
+/**
+ * אפליקציית "שבת וחג אצל טטיי" - מנהל לוגיקה ו-DOM (app.js)
+ */
 
-// חישוב טווח תאריכים וימים (אפשרות א')
-function formatDateRange(dateStr) {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-');
-  const dateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-  const dayOfWeek = dateObj.getDay();
-  const daysNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+// ==========================================
+// 1. הגדרות וקונפיגורציה (CONFIG & STATE)
+// ==========================================
+const CONFIG = {
+  // כתובת שרת ה-GAS (יש להחליף בכתובת ה-Web App הרישמית שלך)
+  GAS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyeLEhyGVsbe_1eMbFDAXDCV5x9OOPw9jvzspdSsPbqDzS3pn0ZIPp5qiSd7ZQ89vO6/exec', 
+  HEBCAL_API_BASE: 'https://www.hebcal.com/hebcal',
+  CACHE_KEY_HEBCAL: 'tatei_hebcal_cache_v1',
+  CACHE_TTL_MS: 24 * 60 * 60 * 1000 // מטמון ל-24 שעות
+};
 
-  if (dayOfWeek === 5) { // שישי
-    const satObj = new Date(dateObj);
-    satObj.setDate(satObj.getDate() + 1);
-    const satD = String(satObj.getDate()).padStart(2, '0');
-    const satM = String(satObj.getMonth() + 1).padStart(2, '0');
-    const satY = satObj.getFullYear();
-    return `שישי - שבת: ${d}/${m}/${y} - ${satD}/${satM}/${satY}`;
-  } else if (dayOfWeek === 6) { // שבת
-    const friObj = new Date(dateObj);
-    friObj.setDate(friObj.getDate() - 1);
-    const friD = String(friObj.getDate()).padStart(2, '0');
-    const friM = String(friObj.getMonth() + 1).padStart(2, '0');
-    const friY = friObj.getFullYear();
-    return `שישי - שבת: ${friD}/${friM}/${friY} - ${d}/${m}/${y}`;
-  } else {
-    return `יום ${daysNames[dayOfWeek]}: ${d}/${m}/${y}`;
-  }
-}
+const AppState = {
+  currentView: 'calendar',
+  events: [],
+  userRsvps: [],
+  selectedEventForConf: null
+};
 
-// 1. לוגיקת תיקוף תאריכים מול Hebcal
-async function validateDateInput(dateStr) {
-  const errorEl = document.getElementById('dateError');
-  const submitBtn = document.getElementById('submitBtn');
-  errorEl.style.display = 'none';
-  submitBtn.disabled = false;
+// ==========================================
+// 2. אתחול האפליקציה (INITIALIZATION)
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+  initNavigation();
+  loadAppContent();
+});
 
-  if (!dateStr) return;
-
-  const [y, m, d] = dateStr.split('-');
-  const dateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-  const dayOfWeek = dateObj.getDay();
-
-  try {
-    const hebcalUrl = `https://www.hebcal.com/hebcal?v=1&cfg=json&start=${dateStr}&end=${dateStr}&maj=on&min=on&mod=on&nx=on`;
-    const res = await fetch(hebcalUrl);
-    const data = await res.json();
-    const holidayItem = data.items && data.items.find(item => item.category === 'holiday');
-
-    if (holidayItem) {
-      detectedEventInfo = { isHoliday: true, eventName: holidayItem.hebrew, dayOfWeek };
-      return;
-    }
-
-    if (dayOfWeek === 5 || dayOfWeek === 6) {
-      detectedEventInfo = { isHoliday: false, eventName: '', dayOfWeek };
-      return;
-    }
-
-    errorEl.innerText = "ניתן לבחור ימי שישי, שבת או ימי חג בלבד.";
-    errorEl.style.display = 'block';
-    submitBtn.disabled = true;
-
-  } catch (e) {
-    console.error("שגיאה בחיבור ל-Hebcal", e);
-  }
-}
-
-// 2. שליחת הטופס (הוספה / עדכון)
-async function handleFormSubmit(e) {
-  e.preventDefault();
-  const name = document.getElementById('name').value;
-  const date = document.getElementById('date').value;
-  
-  const action = editingId ? 'update' : 'add';
-  const payload = {
-    action: action,
-    id: editingId,
-    name: name,
-    date: date,
-    eventName: detectedEventInfo.eventName || ''
-  };
-
-  try {
-    const res = await fetch(GAS_URL, { 
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload) 
+function initNavigation() {
+  // הגדרת מאזיני לחיצה לכפתורי הניווט
+  document.querySelectorAll('.nav-item').forEach(button => {
+    button.addEventListener('click', (e) => {
+      const viewTarget = button.id.replace('nav-', '');
+      switchView(viewTarget);
     });
-
-    const rawText = await res.text();
-    let data;
-
-    try {
-      data = JSON.parse(rawText);
-    } catch (parseError) {
-      alert("השרת החזיר תשובת HTML במקום JSON. ודא שהרשאות הפריסה ב-GAS מוגדרות ל-Anyone.");
-      return;
-    }
-
-    if (data.status === 'success') {
-      showWhatsAppShare(name, date, detectedEventInfo);
-      resetForm();
-      loadRegistrations();
-    } else {
-      alert("שגיאה מהשרת: " + (data.message || "לא ניתן לשמור"));
-    }
-  } catch (err) {
-    alert("שגיאה בתקשורת מול השרת: " + err.message);
-  }
+  });
 }
 
-// 3. מחולל הודעות WhatsApp
-function showWhatsAppShare(name, dateStr, eventInfo) {
-  const [year, month, day] = dateStr.split('-');
-  const formattedDate = `${day}/${month}/${year}`;
-  let eventLine = '';
+// ==========================================
+// 3. ניהול תצוגות (SPA NAVIGATION)
+// ==========================================
+function switchView(viewName) {
+  const views = document.querySelectorAll('.app-view');
+  views.forEach(el => el.classList.add('hidden'));
 
-  if (eventInfo.isHoliday && (eventInfo.dayOfWeek === 5 || eventInfo.dayOfWeek === 6)) {
-    eventLine = `🥂 שבת וחג: ${eventInfo.eventName} (${formattedDate})`;
-  } else if (eventInfo.isHoliday) {
-    const daysMap = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-    eventLine = `🥂 חג: ${eventInfo.eventName} (יום ${daysMap[eventInfo.dayOfWeek]}, ${formattedDate})`;
-  } else {
-    eventLine = `📅 סופ״ש: ${formattedDate}`;
+  const targetView = document.getElementById(`view-${viewName}`);
+  if (targetView) {
+    targetView.classList.remove('hidden');
+    AppState.currentView = viewName;
   }
 
-  const message = `מה נשמע שבט מלקו? ✨\nלידיעתכם 📌\nרשימת שבת/חג אצל טטיי התעדכנה 🌾\n👨‍👩‍👧‍👦 משפחה: ${name}\n${eventLine}\n🔗 לצפייה והרשמה: ${window.location.href}\nהמשך יום נפלא! 😃`;
-
-  const shareBox = document.getElementById('shareBox');
-  const waLink = document.getElementById('whatsappLink');
-  waLink.href = `https://wa.me/?text=${encodeURIComponent(message)}`;
-  shareBox.style.display = 'block';
-}
-
-// 4. חישוב תאריך תפוגה והתראות עבור אירוע מול Hebcal
-async function calculateEventExpiration(dateStr) {
-  const [y, m, d] = dateStr.split('-');
-  const startDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-  let expDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 23, 59, 59);
-  let alertNotice = "";
-  let isHolidaySequence = false;
-  let isAdjacentToShabbat = false;
-
-  const endDateObj = new Date(startDate);
-  endDateObj.setDate(endDateObj.getDate() + 4);
-  const endDateStr = endDateObj.toISOString().split('T')[0];
-
-  try {
-    const res = await fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&start=${dateStr}&end=${endDateStr}&maj=on&min=on`);
-    const data = await res.json();
-    const items = data.items || [];
-
-    let checkDate = new Date(startDate);
-
-    for (let i = 0; i < 5; i++) {
-      const curStr = checkDate.toISOString().split('T')[0];
-      const dayOfWeek = checkDate.getDay();
-
-      const dayItems = items.filter(it => it.date.startsWith(curStr));
-      const isYomTov = dayItems.some(it => it.category === 'holiday' && it.yomtov === true);
-      const isWeekend = (dayOfWeek === 5 || dayOfWeek === 6);
-
-      if (isYomTov || isWeekend) {
-        expDate = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate(), 23, 59, 59);
-
-        if (isYomTov) isHolidaySequence = true;
-        if (isYomTov && isWeekend) isAdjacentToShabbat = true;
-      } else if (i > 0) {
-        break;
-      }
-      checkDate.setDate(checkDate.getDate() + 1);
-    }
-
-    if (isAdjacentToShabbat || (isHolidaySequence && startDate.getDay() === 5)) {
-      alertNotice = "⚡ רצף חג ושבת: ההרשמה פעילה עד מוצאי שבת";
-    }
-  } catch (e) {
-    console.error("שגיאה בחישוב תפוגת אירוע מול Hebcal:", e);
-  }
-
-  return { expDate, alertNotice };
-}
-
-// 5. טעינת נתונים והצגה לפי טאבים
-async function loadRegistrations() {
-  try {
-    const res = await fetch(GAS_URL);
-    allRegistrations = await res.json();
-    await renderCards();
-  } catch (e) {
-    console.error("שגיאה בטעינת נתונים", e);
-  }
-}
-
-async function renderCards() {
-  const container = document.getElementById('cardsContainer');
-  container.innerHTML = '<p style="text-align:center; color: #666;">טוען נתונים...</p>';
-
-  const now = new Date();
-  const processedList = [];
-
-  for (const item of allRegistrations) {
-    const expInfo = await calculateEventExpiration(item.date);
-    const isFuture = expInfo.expDate >= now;
-
-    processedList.push({
-      ...item,
-      isFuture,
-      alertNotice: expInfo.alertNotice
-    });
-  }
-
-  const filtered = processedList.filter(item => currentTab === 'future' ? item.isFuture : !item.isFuture);
-
-  filtered.sort((a, b) => {
-    return currentTab === 'future' 
-      ? new Date(a.date) - new Date(b.date) 
-      : new Date(b.date) - new Date(a.date);
+  // עדכון עיצוב כפתורי הניווט בסרגל התחתון
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.remove('text-orange-700', 'font-bold');
+    el.classList.add('text-neutral-500', 'font-medium');
   });
 
-  container.innerHTML = '';
-
-  if (filtered.length === 0) {
-    container.innerHTML = `<p style="text-align:center; color:#777;">אין הרשמות להצגה בלשונית זו.</p>`;
-    return;
+  const activeNav = document.getElementById(`nav-${viewName}`);
+  if (activeNav) {
+    activeNav.classList.remove('text-neutral-500', 'font-medium');
+    activeNav.classList.add('text-orange-700', 'font-bold');
   }
 
-  for (const item of filtered) {
-    const card = document.createElement('div');
-    card.className = `card ${currentTab === 'history' ? 'history' : ''}`;
-    
-    const tagsHtml = await getCardTagsHtml(item.date, item.eventName);
-
-    card.innerHTML = `
-      <div class="card-main-info">
-        <div class="card-title">${item.name}</div>
-        <div class="card-date">${formatDateRange(item.date)}</div>
-        <div class="card-tags">${tagsHtml}</div>
-        ${item.alertNotice && currentTab === 'future' ? `
-          <div class="card-alert">${item.alertNotice}</div>
-        ` : ''}
-      </div>
-      ${currentTab === 'future' ? `
-        <div class="card-actions">
-          <button class="btn-edit" onclick="startEdit('${item.id}', '${item.name}', '${item.date}')">עריכה</button>
-        </div>
-      ` : ''}
-    `;
-    container.appendChild(card);
-  }
-}
-
-// 6. שליפת תגיות דינמית לפי תרחישים
-async function getCardTagsHtml(dateStr, savedEventName) {
-  const [y, m, d] = dateStr.split('-');
-  const dateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-  const dayOfWeek = dateObj.getDay();
-
-  let tags = '';
-
-  if (savedEventName) {
-    tags += `<span class="tag tag-secondary">${savedEventName} 🍷</span>`;
-  }
-
-  if (dayOfWeek === 5 || dayOfWeek === 6) {
-    const saturdayDate = dayOfWeek === 5 ? new Date(new Date(dateObj).setDate(dateObj.getDate() + 1)) : dateObj;
-    const satStr = saturdayDate.toISOString().split('T')[0];
-    
-    try {
-      const res = await fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&start=${satStr}&end=${satStr}&s=on`);
-      const data = await res.json();
-      const parashaItem = data.items && data.items.find(i => i.category === 'parashat');
-      const parashaName = parashaItem ? parashaItem.hebrew : 'שבת';
-      tags += `<span class="tag tag-primary">${parashaName} 🕯️</span>`;
-    } catch (e) {
-      tags += `<span class="tag tag-primary">שבת 🕯️</span>`;
-    }
-  } else if (!savedEventName) {
-    tags += `<span class="tag tag-primary">סופ״ש 📅</span>`;
-  }
-
-  return tags;
-}
-
-// 7. ניהול מצבי טופס
-function startEdit(id, name, date) {
-  editingId = id;
-  document.getElementById('name').value = name;
-  document.getElementById('date').value = date;
-  
-  document.getElementById('formCard').classList.add('edit-mode');
-  document.getElementById('submitBtn').innerText = 'עדכן הרשמה';
-  validateDateInput(date);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function resetForm() {
-  editingId = null;
-  document.getElementById('regForm').reset();
-  document.getElementById('formCard').classList.remove('edit-mode');
-  document.getElementById('submitBtn').innerText = 'אישור הרשמה';
-  document.getElementById('submitBtn').disabled = false;
-  document.getElementById('dateError').style.display = 'none';
+// ==========================================
+// 4. טעינת נתונים ומנגנון Caching (DATA & CACHE)
+// ==========================================
+async function loadAppContent() {
+  try {
+    const [hebcalData, gasData] = await Promise.all([
+      getHebcalDataWithCache(),
+      fetchGasRsvps()
+    ]);
+
+    AppState.events = processEventsData(hebcalData, gasData);
+    renderCalendarCards();
+    renderMyRSVPs();
+  } catch (error) {
+    console.error('שגיאה שטעינת נתוני האפליקציה:', error);
+  }
 }
 
-function switchTab(tab) {
-  currentTab = tab;
-  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-  event.target.classList.add('active');
-  renderCards();
+async function getHebcalDataWithCache() {
+  const cached = localStorage.getItem(CONFIG.CACHE_KEY_HEBCAL);
+  const now = Date.now();
+
+  if (cached) {
+    const { timestamp, data } = JSON.parse(cached);
+    if (now - timestamp < CONFIG.CACHE_TTL_MS) {
+      return data; // החזרת נתונים מהמטמון
+    }
+  }
+
+  // שליפה עדכנית מ-Hebcal במידה והמטמון פג תוקף
+  const currentYear = new Date().getFullYear();
+  const url = `${CONFIG.HEBCAL_API_BASE}?v=1&cfg=json&maj=on&min=off&mod=on&nx=on&year=${currentYear}&month=x&ss=on&mf=on&c=on&geo=id&city=IL-Jerusalem&M=on&s=on`;
+
+  const response = await fetch(url);
+  const data = await response.json();
+
+  // שמירה במטמון
+  localStorage.setItem(CONFIG.CACHE_KEY_HEBCAL, JSON.stringify({
+    timestamp: now,
+    data: data
+  }));
+
+  return data;
 }
 
-// אתחול טעינה
-loadRegistrations();
+async function fetchGasRsvps() {
+  if (!CONFIG.GAS_SCRIPT_URL || CONFIG.GAS_SCRIPT_URL.includes('YOUR_GAS')) {
+    // נתוני דמו במידה וטרם הוגדרה כתובת GAS רשמית
+    return [
+      { eventId: 'rosh-hashana-2026', familyName: 'משפחת יוחאי', status: 'approved' },
+      { eventId: 'rosh-hashana-2026', familyName: 'דניאל ומיכל', status: 'approved' },
+      { eventId: 'succot-1-2026', familyName: 'משפחת אלמו מלקו', status: 'approved' }
+    ];
+  }
+
+  try {
+    const res = await fetch(`${CONFIG.GAS_SCRIPT_URL}?action=getRsvps`);
+    return await res.json();
+  } catch (e) {
+    console.warn('לא ניתן לשלוף נתונים מ-GAS, מעבר לנתונים מקומיים', e);
+    return [];
+  }
+}
+
+// ==========================================
+// 5. עיבוד נתונים (DATA PROCESSING)
+// ==========================================
+function processEventsData(hebcalData, gasRsvps) {
+  if (!hebcalData || !hebcalData.items) return [];
+
+  // סינון אירועים רלוונטיים (חגים ושבתות בלבד - ללא חול המועד)
+  const relevantItems = hebcalData.items.filter(item => {
+    return item.category === 'holiday' || item.category === 'candles';
+  });
+
+  // איגוד אירועים לפי מועד וחיבור להרשמות הקיימות
+  return relevantItems.slice(0, 10).map(item => {
+    const eventId = item.memo || item.title;
+    const rsvps = gasRsvps.filter(r => r.eventId === eventId);
+    
+    return {
+      id: eventId,
+      title: item.hebrew || item.title,
+      dateRangeStr: formatDateRange(item.date),
+      candleLighting: item.candles || '18:15',
+      havdalah: item.havdalah || '19:10',
+      isCovered: rsvps.length > 0,
+      rsvps: rsvps,
+      rawItem: item
+    };
+  });
+}
+
+function formatDateRange(isoDateStr) {
+  if (!isoDateStr) return '';
+  const d = new Date(isoDateStr);
+  const nextDay = new Date(d);
+  nextDay.setDate(d.getDate() + 1);
+
+  const formatDate = (dateObj) => {
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    return `${day}/${month}/${dateObj.getFullYear()}`;
+  };
+
+  return `שישי - שבת: ${formatDate(d)} - ${formatDate(nextDay)}`;
+}
+
+// ==========================================
+// 6. רנדור דינמי של DOM (DOM RENDERING)
+// ==========================================
+function renderCalendarCards() {
+  const container = document.getElementById('cards-container');
+  if (!container) return;
+
+  if (AppState.events.length === 0) {
+    container.innerHTML = `<p class="text-center text-xs text-neutral-500 py-4">טוען מועדים קרובים...</p>`;
+    return;
+  }
+
+  container.innerHTML = AppState.events.map(event => {
+    const coveredBadge = event.isCovered
+      ? `<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">✓ מועד מכוסה - יש ליווי לטטיי ❤️</span>`
+      : `<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold">⚠️ דורש ליווי לטטיי!</span>`;
+
+    const rsvpsList = event.rsvps.map(r => 
+      `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-700 font-medium text-xs">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span> ${r.familyName}
+      </span>`
+    ).join('');
+
+    return `
+      <article class="bg-white rounded-3xl p-5 border ${event.isCovered ? 'border-[#f0e7d9]' : 'border-2 border-orange-200'} shadow-sm space-y-4">
+        <div class="flex items-center justify-between">
+          ${coveredBadge}
+        </div>
+
+        <div>
+          <h3 class="text-xl font-bold text-neutral-900">${event.title}</h3>
+          <p class="text-xs text-neutral-500 font-medium mt-0.5">${event.dateRangeStr}</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 bg-[#fdfaf5] border border-[#f5ebdc] rounded-2xl p-3 text-center">
+          <div>
+            <div class="text-[11px] text-neutral-500">הדלקת נרות</div>
+            <div class="text-base font-bold text-orange-700">${event.candleLighting}</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-neutral-500">צאת המועד</div>
+            <div class="text-base font-bold text-neutral-800">${event.havdalah}</div>
+          </div>
+        </div>
+
+        ${event.rsvps.length > 0 ? `
+          <div class="space-y-2">
+            <div class="text-xs font-bold text-neutral-800">מי נמצא עם טטיי?</div>
+            <div class="flex flex-wrap gap-2">${rsvpsList}</div>
+          </div>
+        ` : ''}
+
+        <div class="bg-[#fcf8f2] rounded-2xl p-3 border border-[#f3e6d2] space-y-2.5">
+          <input type="text" id="input-${event.id}" placeholder="שם המשפחה (לדוגמה: משפחת מלקו)" 
+                 class="w-full bg-white border border-[#e2d5c2] rounded-xl px-3 py-2 text-xs text-neutral-800 focus:outline-none focus:ring-2 focus:ring-orange-500">
+          <button onclick="handleRegister('${event.id}')" class="w-full bg-[#d97736] hover:bg-[#c2652b] text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-sm flex items-center justify-center gap-1.5 transition">
+            <span class="material-symbols-outlined text-sm">favorite</span>
+            <span>עדכנו שאנחנו עם טטיי</span>
+          </button>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+function renderMyRSVPs() {
+  const container = document.getElementById('my-rsvps-container');
+  if (!container) return;
+
+  const myRegistrations = AppState.events.filter(e => e.isCovered);
+
+  if (myRegistrations.length === 0) {
+    container.innerHTML = `<p class="text-xs text-neutral-500 text-center py-3">טרם נרשמתם למועדים הקרובים.</p>`;
+    return;
+  }
+
+  container.innerHTML = myRegistrations.map(item => `
+    <div class="bg-white rounded-3xl p-5 border border-[#f0e7d9] shadow-sm space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">✓ ליווי מאושר</span>
+      </div>
+      <div>
+        <h3 class="text-lg font-bold text-neutral-900">${item.title}</h3>
+        <p class="text-xs text-neutral-500 mt-0.5">${item.dateRangeStr}</p>
+      </div>
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <button onclick="switchView('calendar')" class="bg-[#f4ece1] hover:bg-[#ebdccb] text-neutral-800 font-bold text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-1 transition">
+          <span class="material-symbols-outlined text-sm">edit</span>
+          <span>עדכון</span>
+        </button>
+        <button onclick="handleCancelRSVP('${item.id}')" class="bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs py-2.5 px-3 rounded-xl border border-red-200 flex items-center justify-center gap-1 transition">
+          <span class="material-symbols-outlined text-sm">cancel</span>
+          <span>ביטול</span>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ==========================================
+// 7. טיפול באירועים והרשמה (ACTION HANDLERS)
+// ==========================================
+async function handleRegister(eventId) {
+  const inputEl = document.getElementById(`input-${eventId}`);
+  const familyName = inputEl ? inputEl.value.trim() : '';
+
+  if (!familyName) {
+    alert('אנא הזן את שם המשפחה לפני הרישום.');
+    return;
+  }
+
+  const targetEvent = AppState.events.find(e => e.id === eventId);
+  if (!targetEvent) return;
+
+  // עדכון המצב המקומי
+  targetEvent.isCovered = true;
+  targetEvent.rsvps.push({ eventId, familyName, status: 'approved' });
+
+  // עדכון מסך האישור
+  setupConfirmationScreen(targetEvent, familyName);
+
+  // רינדור מחדש ומעבר למסך אישור
+  renderCalendarCards();
+  renderMyRSVPs();
+  switchView('confirmation');
+
+  // שליחה ל-GAS ברקע
+  sendRsvpToGas(eventId, familyName, 'register');
+}
+
+function setupConfirmationScreen(eventObj, familyName) {
+  document.getElementById('conf-title').textContent = eventObj.title;
+  document.getElementById('conf-date-range').textContent = eventObj.dateRangeStr;
+  document.getElementById('conf-family-name').textContent = familyName;
+  document.getElementById('conf-candle-lighting').textContent = eventObj.candleLighting;
+  document.getElementById('conf-havdalah').textContent = eventObj.havdalah;
+
+  // יצירת קישור מעוצב ל-WhatsApp
+  const whatsappMsg = encodeURIComponent(`שמחים לעדכן ש${familyName} רשומים ללוות את טטיי ב${eventObj.title}! ❤️`);
+  document.getElementById('conf-whatsapp-btn').href = `https://wa.me/?text=${whatsappMsg}`;
+}
+
+async function handleCancelRSVP(eventId) {
+  if (!confirm('האם לבטל את הרישום ולפתוח את המועד למשפחה אחרת?')) return;
+
+  const targetEvent = AppState.events.find(e => e.id === eventId);
+  if (targetEvent) {
+    targetEvent.isCovered = false;
+    targetEvent.rsvps = [];
+    renderCalendarCards();
+    renderMyRSVPs();
+    sendRsvpToGas(eventId, '', 'cancel');
+  }
+}
+
+async function sendRsvpToGas(eventId, familyName, action) {
+  if (!CONFIG.GAS_SCRIPT_URL || CONFIG.GAS_SCRIPT_URL.includes('YOUR_GAS')) return;
+
+  try {
+    await fetch(CONFIG.GAS_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, eventId, familyName, timestamp: new Date().toISOString() })
+    });
+  } catch (err) {
+    console.error('שגיאה בשליחת הרישום ל-GAS:', err);
+  }
+}
