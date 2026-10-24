@@ -1,5 +1,6 @@
-/* שבת וחג אצל טטיי - style.css v2.0
-   עקרונות: גופן בסיס 18px, יעדי מגע מעל 48px, ניגודיות AA, בלי תלות ב-hover. */
+/* שבת וחג אצל טטיי - style.css v2.1
+   עקרונות: גופן בסיס 18px, יעדי מגע 44px ומעלה, ניגודיות AA, מרווחים קומפקטיים כדי
+   שרשימת ההרשמות תופיע במסך הראשון, בלי תלות ב-hover. */
 :root {
   --olive: #556B2F;
   --olive-dark: #4A5E28;
@@ -17,35 +18,36 @@
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
-  padding: 16px 14px 40px;
+  padding: 10px 12px 28px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Hebrew", Arial, sans-serif;
   font-size: 18px;
-  line-height: 1.5;
+  line-height: 1.4;
   background: var(--bg);
   color: var(--text);
 }
 .container { max-width: 600px; margin: 0 auto; }
-h1 { text-align: center; color: var(--olive); font-size: 1.7rem; margin: 6px 0 2px; }
-.sub-header { text-align: center; margin: 0 0 16px; }
-.section-title { font-size: 1.25rem; margin: 0 0 12px; color: var(--olive); }
+h1 { text-align: center; color: var(--olive); font-size: 1.45rem; margin: 2px 0 8px; line-height: 1.25; }
+.hearts { font-size: 1rem; }
 
 /* טופס */
 .form-card {
   background: var(--card);
   border: 2px solid var(--olive);
   border-radius: 12px;
-  padding: 18px;
-  margin-bottom: 22px;
+  padding: 12px;
+  margin-bottom: 12px;
 }
 .form-card.edit-mode { border-color: var(--terracotta); }
 .edit-banner {
   background: var(--terracotta); color: #fff; font-weight: bold;
-  padding: 10px 12px; border-radius: 8px; margin-bottom: 14px;
+  padding: 8px 10px; border-radius: 8px; margin-bottom: 10px;
 }
-.form-group { margin: 0 0 16px; padding: 0; border: 0; min-width: 0; }
-label, legend { display: block; font-weight: bold; margin-bottom: 6px; padding: 0; }
+.form-group { margin: 0 0 10px; padding: 0; border: 0; min-width: 0; }
+label, legend { display: block; font-weight: bold; margin-bottom: 4px; padding: 0; }
+legend { white-space: nowrap; }
+legend small { font-size: clamp(0.72rem, 3.3vw, 0.85rem); font-weight: normal; color: var(--muted); }
 input[type="text"] {
-  width: 100%; min-height: 52px; padding: 10px 12px;
+  width: 100%; min-height: 48px; padding: 8px 12px;
   font-size: 1.05rem; font-family: inherit;
   border: 2px solid #8A8A8A; border-radius: 8px; background: #fff; color: var(--text);
 }
@@ -53,28 +55,28 @@ input[type="text"]:focus-visible, .btn:focus-visible, .tab-btn:focus-visible, .e
   outline: 3px solid #1D4ED8; outline-offset: 2px;
 }
 
-/* בורר אירועים */
-.event-list { display: flex; flex-direction: column; gap: 10px; }
+/* בורר מועדים */
+.event-list { display: flex; flex-direction: column; gap: 8px; }
 .event {
-  display: flex; align-items: center; gap: 14px;
-  min-height: 64px; padding: 12px 14px;
-  border: 2px solid var(--line); border-right-width: 8px; border-radius: 10px;
+  display: flex; align-items: center; gap: 12px;
+  min-height: 56px; padding: 6px 12px;
+  border: 2px solid var(--line); border-right-width: 6px; border-radius: 10px;
   background: #fff; cursor: pointer; font-weight: normal; margin: 0;
 }
 .event.shabbat { border-right-color: var(--olive); }
 .event.holiday { border-right-color: var(--terracotta); }
 .event.checked { background: #EEF3E4; border-color: var(--olive); }
 .event.holiday.checked { background: #FBEDE6; border-color: var(--terracotta); }
-.event input { width: 30px; height: 30px; flex: none; margin: 0; accent-color: var(--olive); }
+.event input { width: 28px; height: 28px; flex: none; margin: 0; accent-color: var(--olive); }
 .event.holiday input { accent-color: var(--terracotta); }
-.event-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.event-title { font-weight: bold; font-size: 1.05rem; }
-.event-date { color: var(--muted); font-size: 0.95rem; }
-.event-seq { color: var(--warn-text); background: var(--warn-bg); font-weight: bold; font-size: 0.9rem; padding: 2px 8px; border-radius: 6px; align-self: flex-start; margin-top: 4px; }
+.event-body { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.event-title { font-weight: bold; font-size: 1rem; }
+.event-date { color: var(--muted); font-size: 0.9rem; }
+.event-seq { color: var(--warn-text); background: var(--warn-bg); font-weight: bold; font-size: 0.85rem; padding: 0 8px; border-radius: 6px; align-self: flex-start; margin-top: 2px; }
 
 /* כפתורים */
 .btn {
-  min-height: 52px; padding: 12px 18px; border: 0; border-radius: 10px;
+  min-height: 48px; padding: 8px 16px; border: 0; border-radius: 10px;
   font: inherit; font-weight: bold; color: #fff; cursor: pointer; text-decoration: none;
   display: inline-flex; align-items: center; justify-content: center; text-align: center;
 }
@@ -84,50 +86,52 @@ input[type="text"]:focus-visible, .btn:focus-visible, .tab-btn:focus-visible, .e
 .btn-submit { background: var(--olive); }
 .form-card.edit-mode .btn-submit { background: var(--terracotta); }
 .btn-cancel { background: #5F5F5F; }
-.btn-more { width: 100%; margin-top: 10px; background: #fff; color: var(--olive); border: 2px solid var(--olive); }
+.btn-more { width: 100%; min-height: 44px; margin-top: 8px; background: #fff; color: var(--olive-dark); border: 2px solid var(--olive); }
 .btn-whatsapp { background: #167F3D; width: 100%; }
 .link-btn { background: none; border: 0; padding: 0; font: inherit; color: #1D4ED8; text-decoration: underline; cursor: pointer; }
 
-.form-msg { min-height: 1.5em; margin: 0 0 12px; font-weight: bold; }
+.form-msg { margin: 0 0 8px; font-weight: bold; }
+.form-msg:empty { margin: 0; }
 .form-msg.error { color: #B00020; }
 .form-msg.ok { color: var(--olive-dark); }
 .form-msg.info { color: var(--muted); }
 
 .share-box {
   background: #E8F5E9; border: 2px solid #167F3D; border-radius: 10px;
-  padding: 16px; margin-bottom: 22px; text-align: center;
+  padding: 12px; margin-bottom: 12px; text-align: center;
 }
-.share-title { margin: 0 0 12px; font-weight: bold; }
+.share-title { margin: 0 0 8px; font-weight: bold; }
 
 /* לשוניות */
-.tabs { display: flex; border-bottom: 2px solid var(--line); margin-bottom: 14px; }
+.tabs { display: flex; border-bottom: 2px solid var(--line); margin-bottom: 8px; }
 .tab-btn {
-  flex: 1; min-height: 52px; background: none; border: 0; border-bottom: 4px solid transparent;
-  font: inherit; font-size: 1rem; color: var(--muted); cursor: pointer; padding: 8px 6px;
+  flex: 1; min-height: 46px; background: none; border: 0; border-bottom: 4px solid transparent;
+  font: inherit; font-size: 1rem; color: var(--muted); cursor: pointer; padding: 6px;
 }
 .tab-btn.active { color: var(--olive-dark); font-weight: bold; border-bottom-color: var(--olive); }
 
-/* כרטיסי הרשמה */
-.cards-list { display: flex; flex-direction: column; gap: 12px; }
+/* כרטיסי הרשמה: טקסט מימין, פעולות בטור משמאל (חוסך גובה) */
+.cards-list { display: flex; flex-direction: column; gap: 8px; }
 .card {
-  background: var(--card); border: 1px solid var(--line); border-right: 8px solid var(--olive);
-  border-radius: 12px; padding: 14px 16px;
-  display: flex; flex-direction: column; gap: 12px;
+  background: var(--card); border: 1px solid var(--line); border-right: 6px solid var(--olive);
+  border-radius: 12px; padding: 8px 10px;
+  display: flex; flex-direction: row; align-items: center; gap: 10px;
 }
 .card.holiday { border-right-color: var(--terracotta); }
 .card.history { background: #F6F4EF; border-right-color: #8A8A8A; }
-.card-title { font-size: 1.2rem; font-weight: bold; overflow-wrap: anywhere; }
-.card-date { color: var(--muted); }
-.card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-.tag { display: inline-block; padding: 4px 12px; border-radius: 16px; font-size: 0.95rem; font-weight: bold; color: #fff; background: var(--olive); }
+.card-main { flex: 1; min-width: 0; }
+.card-title { font-size: 1.1rem; font-weight: bold; overflow-wrap: anywhere; line-height: 1.25; }
+.card-date { color: var(--muted); font-size: 0.92rem; }
+.card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.tag { display: inline-block; padding: 1px 10px; border-radius: 14px; font-size: 0.9rem; font-weight: bold; color: #fff; background: var(--olive); }
 .tag.holiday { background: var(--terracotta); }
 .card.history .tag { background: #5F5F5F; }
-.card-alert { margin-top: 8px; background: var(--warn-bg); color: var(--warn-text); padding: 6px 10px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; }
-.card-actions { display: flex; gap: 10px; }
-.card-actions .btn { flex: 1; min-height: 48px; }
+.card-alert { margin-top: 4px; background: var(--warn-bg); color: var(--warn-text); padding: 2px 8px; border-radius: 6px; font-weight: bold; font-size: 0.9rem; display: inline-block; }
+.card-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.card-actions .btn { min-height: 44px; min-width: 84px; padding: 4px 10px; font-size: 0.95rem; }
 .btn-edit { background: var(--olive); }
 .btn-del { background: #9B1C1C; }
 
-.empty { text-align: center; color: var(--muted); padding: 16px 0; }
+.empty { text-align: center; color: var(--muted); padding: 12px 0; margin: 0; }
 
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
