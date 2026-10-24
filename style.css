@@ -1,153 +1,133 @@
+/* שבת וחג אצל טטיי - style.css v2.0
+   עקרונות: גופן בסיס 18px, יעדי מגע מעל 48px, ניגודיות AA, בלי תלות ב-hover. */
 :root {
-  --olive-green: #556B2F;
-  --terracotta: #C85A32;
-  --bg-color: #FDFBF7;
-  --card-bg: #FFFFFF;
+  --olive: #556B2F;
+  --olive-dark: #4A5E28;
+  --terracotta: #B24A25;   /* כהה יותר מ-#C85A32 (ניגודיות 5.4:1 מול לבן במקום 4.2:1) */
+  --bg: #FDFBF7;
+  --card: #FFFFFF;
+  --text: #222222;
+  --muted: #555555;
+  --line: #D8D4CC;
+  --warn-bg: #FFF3CD;
+  --warn-text: #5C4400;
 }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
 body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background-color: var(--bg-color);
   margin: 0;
-  padding: 15px;
-  color: #333;
+  padding: 16px 14px 40px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Hebrew", Arial, sans-serif;
+  font-size: 18px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
 }
 .container { max-width: 600px; margin: 0 auto; }
-h1 { text-align: center; color: var(--olive-green); margin-bottom: 5px; }
-.sub-header { text-align: center; font-size: 1.2rem; margin-bottom: 20px; }
+h1 { text-align: center; color: var(--olive); font-size: 1.7rem; margin: 6px 0 2px; }
+.sub-header { text-align: center; margin: 0 0 16px; }
+.section-title { font-size: 1.25rem; margin: 0 0 12px; color: var(--olive); }
 
-/* עיצוב הטופס */
+/* טופס */
 .form-card {
-  background: var(--card-bg);
-  border: 2px solid var(--olive-green);
+  background: var(--card);
+  border: 2px solid var(--olive);
   border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 25px;
-  transition: border-color 0.3s;
+  padding: 18px;
+  margin-bottom: 22px;
 }
-.form-card.edit-mode {
-  border-color: var(--terracotta);
-}
+.form-card.edit-mode { border-color: var(--terracotta); }
 .edit-banner {
-  display: none;
-  background-color: var(--terracotta);
-  color: #fff;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.9em;
-  margin-bottom: 12px;
-  font-weight: bold;
+  background: var(--terracotta); color: #fff; font-weight: bold;
+  padding: 10px 12px; border-radius: 8px; margin-bottom: 14px;
 }
-.form-card.edit-mode .edit-banner { display: block; }
-
-.form-group { margin-bottom: 15px; }
-label { display: block; margin-bottom: 5px; font-weight: bold; }
-input[type="text"], input[type="date"] {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  box-sizing: border-box;
-  font-size: 1rem;
+.form-group { margin: 0 0 16px; padding: 0; border: 0; min-width: 0; }
+label, legend { display: block; font-weight: bold; margin-bottom: 6px; padding: 0; }
+input[type="text"] {
+  width: 100%; min-height: 52px; padding: 10px 12px;
+  font-size: 1.05rem; font-family: inherit;
+  border: 2px solid #8A8A8A; border-radius: 8px; background: #fff; color: var(--text);
 }
-input[type="date"] { dir: ltr; text-align: right; }
+input[type="text"]:focus-visible, .btn:focus-visible, .tab-btn:focus-visible, .event input:focus-visible {
+  outline: 3px solid #1D4ED8; outline-offset: 2px;
+}
 
+/* בורר אירועים */
+.event-list { display: flex; flex-direction: column; gap: 10px; }
+.event {
+  display: flex; align-items: center; gap: 14px;
+  min-height: 64px; padding: 12px 14px;
+  border: 2px solid var(--line); border-right-width: 8px; border-radius: 10px;
+  background: #fff; cursor: pointer; font-weight: normal; margin: 0;
+}
+.event.shabbat { border-right-color: var(--olive); }
+.event.holiday { border-right-color: var(--terracotta); }
+.event.checked { background: #EEF3E4; border-color: var(--olive); }
+.event.holiday.checked { background: #FBEDE6; border-color: var(--terracotta); }
+.event input { width: 30px; height: 30px; flex: none; margin: 0; accent-color: var(--olive); }
+.event.holiday input { accent-color: var(--terracotta); }
+.event-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.event-title { font-weight: bold; font-size: 1.05rem; }
+.event-date { color: var(--muted); font-size: 0.95rem; }
+.event-seq { color: var(--warn-text); background: var(--warn-bg); font-weight: bold; font-size: 0.9rem; padding: 2px 8px; border-radius: 6px; align-self: flex-start; margin-top: 4px; }
+
+/* כפתורים */
+.btn {
+  min-height: 52px; padding: 12px 18px; border: 0; border-radius: 10px;
+  font: inherit; font-weight: bold; color: #fff; cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; text-align: center;
+}
+.btn:disabled { opacity: 0.6; cursor: wait; }
 .btn-group { display: flex; gap: 10px; }
-button {
-  flex: 1;
-  padding: 12px;
-  border: none;
-  border-radius: 6px;
-  font-size: 1rem;
-  cursor: pointer;
-  font-weight: bold;
-  color: white;
-}
-.btn-submit { background-color: var(--olive-green); }
-.form-card.edit-mode .btn-submit { background-color: var(--terracotta); }
-.btn-cancel { background-color: #777; display: none; }
-.form-card.edit-mode .btn-cancel { display: block; }
+.btn-group .btn { flex: 1; }
+.btn-submit { background: var(--olive); }
+.form-card.edit-mode .btn-submit { background: var(--terracotta); }
+.btn-cancel { background: #5F5F5F; }
+.btn-more { width: 100%; margin-top: 10px; background: #fff; color: var(--olive); border: 2px solid var(--olive); }
+.btn-whatsapp { background: #167F3D; width: 100%; }
+.link-btn { background: none; border: 0; padding: 0; font: inherit; color: #1D4ED8; text-decoration: underline; cursor: pointer; }
 
-/* ניהול לשוניות (טאבים) - הוחזר לעיצוב המקורי */
-.tabs { display: flex; border-bottom: 2px solid #ccc; margin-bottom: 15px; }
+.form-msg { min-height: 1.5em; margin: 0 0 12px; font-weight: bold; }
+.form-msg.error { color: #B00020; }
+.form-msg.ok { color: var(--olive-dark); }
+.form-msg.info { color: var(--muted); }
+
+.share-box {
+  background: #E8F5E9; border: 2px solid #167F3D; border-radius: 10px;
+  padding: 16px; margin-bottom: 22px; text-align: center;
+}
+.share-title { margin: 0 0 12px; font-weight: bold; }
+
+/* לשוניות */
+.tabs { display: flex; border-bottom: 2px solid var(--line); margin-bottom: 14px; }
 .tab-btn {
-  flex: 1;
-  background: none;
-  border: none;
-  padding: 10px;
-  font-size: 1rem;
-  color: #666;
-  border-bottom: 3px solid transparent;
-  cursor: pointer;
+  flex: 1; min-height: 52px; background: none; border: 0; border-bottom: 4px solid transparent;
+  font: inherit; font-size: 1rem; color: var(--muted); cursor: pointer; padding: 8px 6px;
 }
-.tab-btn.active {
-  color: var(--olive-green);
-  border-bottom-color: var(--olive-green);
-  font-weight: bold;
-}
+.tab-btn.active { color: var(--olive-dark); font-weight: bold; border-bottom-color: var(--olive); }
 
-/* כרטיסיות נרשמים בעיצוב מעודכן */
+/* כרטיסי הרשמה */
 .cards-list { display: flex; flex-direction: column; gap: 12px; }
 .card {
-  background: var(--card-bg);
-  border: 1px solid #e0e0e0;
-  border-right: 6px solid var(--olive-green);
-  border-radius: 12px;
-  padding: 16px 20px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 15px;
+  background: var(--card); border: 1px solid var(--line); border-right: 8px solid var(--olive);
+  border-radius: 12px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 12px;
 }
-.card.history { opacity: 0.65; background-color: #f9f9f9; border-right-color: #888; }
+.card.holiday { border-right-color: var(--terracotta); }
+.card.history { background: #F6F4EF; border-right-color: #8A8A8A; }
+.card-title { font-size: 1.2rem; font-weight: bold; overflow-wrap: anywhere; }
+.card-date { color: var(--muted); }
+.card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.tag { display: inline-block; padding: 4px 12px; border-radius: 16px; font-size: 0.95rem; font-weight: bold; color: #fff; background: var(--olive); }
+.tag.holiday { background: var(--terracotta); }
+.card.history .tag { background: #5F5F5F; }
+.card-alert { margin-top: 8px; background: var(--warn-bg); color: var(--warn-text); padding: 6px 10px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; }
+.card-actions { display: flex; gap: 10px; }
+.card-actions .btn { flex: 1; min-height: 48px; }
+.btn-edit { background: var(--olive); }
+.btn-del { background: #9B1C1C; }
 
-.card-main-info { display: flex; flex-direction: column; gap: 6px; flex-grow: 1; }
-.card-title { font-size: 1.15rem; font-weight: bold; color: #222; }
-.card-date { font-size: 0.9rem; color: #666; }
-.card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.empty { text-align: center; color: var(--muted); padding: 16px 0; }
 
-.tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 12px;
-  border-radius: 16px;
-  font-size: 0.85rem;
-  font-weight: bold;
-  color: white;
-}
-.tag-primary { background-color: var(--olive-green); }
-.tag-secondary { background-color: var(--terracotta); }
-
-.card-alert {
-  margin-top: 6px;
-  background-color: #FFF3CD;
-  color: #856404;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: bold;
-}
-
-.card-actions { display: flex; align-items: center; }
-.btn-edit {
-  background-color: var(--terracotta);
-  padding: 8px 18px;
-  font-size: 0.9rem;
-  border-radius: 8px;
-  font-weight: bold;
-  color: white;
-  border: none;
-  cursor: pointer;
-}
-
-/* תיבת שיתוף WhatsApp */
-.share-box {
-  display: none;
-  background-color: #E8F5E9;
-  border: 1px solid #4CAF50;
-  border-radius: 8px;
-  padding: 15px;
-  margin-bottom: 20px;
-  text-align: center;
-}
-.btn-whatsapp { background-color: #25D366; text-decoration: none; color: white; display: inline-block; padding: 10px 15px; border-radius: 6px; font-weight: bold; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
