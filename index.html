@@ -2,54 +2,57 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#556B2F">
   <title>שבת וחג אצל טטיי</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2.0">
 </head>
 <body>
-
-<div class="container">
+<main class="container">
   <h1>שבת וחג אצל טטיי</h1>
-  <div class="sub-header">💗💗💗</div>
+  <p class="sub-header" aria-hidden="true">💗💗💗</p>
 
-  <!-- טופס הרשמה / עריכה -->
-  <div class="form-card" id="formCard">
-    <div class="edit-banner" id="editBanner">מצב עריכה פעיל</div>
-    <form id="regForm" onsubmit="handleFormSubmit(event)">
+  <!-- טופס הרשמה / עריכת שם -->
+  <section class="form-card" id="formCard" aria-labelledby="formTitle">
+    <h2 class="section-title" id="formTitle">הרשמה</h2>
+    <div class="edit-banner" id="editBanner" hidden></div>
+    <form id="regForm" novalidate>
       <div class="form-group">
-        <label for="name">שם מלא / משפחה:</label>
-        <input type="text" id="name" placeholder="תמר ותומר" required>
+        <label for="name">שם מלא / משפחה</label>
+        <input type="text" id="name" list="nameList" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="תמר ותומר">
+        <datalist id="nameList"></datalist>
       </div>
-      
-      <div class="form-group">
-        <label for="date">תאריך האירוע:</label>
-        <input type="date" id="date" required onchange="validateDateInput(this.value)">
-        <small id="dateError" style="color: red; display: none; margin-top: 4px;"></small>
-      </div>
+
+      <fieldset class="form-group picker" id="pickerGroup">
+        <legend>באילו אירועים תהיו? אפשר לסמן כמה</legend>
+        <div class="event-list" id="eventPicker" aria-live="polite">טוען אירועים...</div>
+        <button type="button" class="btn btn-more" id="moreBtn" hidden>הצג עוד אירועים</button>
+      </fieldset>
+
+      <p class="form-msg" id="formMsg" role="status" aria-live="polite"></p>
 
       <div class="btn-group">
-        <button type="submit" class="btn-submit" id="submitBtn">אישור הרשמה</button>
-        <button type="button" class="btn-cancel" onclick="resetForm()">ביטול</button>
+        <button type="submit" class="btn btn-submit" id="submitBtn">אישור הרשמה</button>
+        <button type="button" class="btn btn-cancel" id="cancelBtn" hidden>ביטול</button>
       </div>
     </form>
+  </section>
+
+  <!-- שיתוף WhatsApp -->
+  <section class="share-box" id="shareBox" hidden>
+    <p class="share-title">✨ ההרשמה התקבלה בהצלחה!</p>
+    <a href="#" id="whatsappLink" target="_blank" rel="noopener" class="btn btn-whatsapp">שיתוף בקבוצת ה-WhatsApp המשפחתית 📱</a>
+  </section>
+
+  <!-- לשוניות -->
+  <div class="tabs" role="tablist">
+    <button type="button" class="tab-btn active" role="tab" aria-selected="true" data-tab="future">שבתות וחגים קרובים</button>
+    <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="history">שבתות וחגים שהיו</button>
   </div>
 
-  <!-- תיבת שיתוף WhatsApp -->
-  <div class="share-box" id="shareBox">
-    <p style="margin-top:0;">✨ ההרשמה התקבלה בהצלחה!</p>
-    <a href="#" id="whatsappLink" target="_blank" class="btn-whatsapp">שתף בקבוצת ה-WhatsApp המשפחתית 📱</a>
-  </div>
-
-  <!-- מערכת לשוניות -->
-  <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('future')">שבתות וחגים קרובים</button>
-    <button class="tab-btn" onclick="switchTab('history')">שבתות וחגים שהיו</button>
-  </div>
-
-  <!-- רשימת הרשמות -->
   <div class="cards-list" id="cardsContainer"></div>
-</div>
-
-<script src="app.js"></script>
+  <noscript><p class="empty">האפליקציה דורשת JavaScript.</p></noscript>
+</main>
+<script src="app.js?v=2.0" defer></script>
 </body>
 </html>
