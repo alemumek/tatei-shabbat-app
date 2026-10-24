@@ -1,4 +1,4 @@
-/* שבת וחג אצל טטיי - app.js v2.0
+/* שבת וחג אצל טטיי - app.js v2.1
    ארכיטקטורה: פונקציות טהורות (נבדקות ב-Node) + שכבת UI דקה.
    Hebcal נקרא עד 3 פעמים בכל 7 ימים (מטמון), ולא פעם לכל כרטיס. */
 'use strict';
@@ -8,7 +8,9 @@ const CONFIG = {
   HORIZON_DAYS: 270,             // כמה ימים קדימה מציגים אירועים
   CHUNK_DAYS: 100,               // גודל טווח בקריאה אחת ל-Hebcal
   EVENTS_CACHE_MAX_AGE_MS: 7 * 24 * 60 * 60 * 1000,
-  INITIAL_EVENTS_SHOWN: 8,
+  INITIAL_EVENTS_SHOWN: 3,       // כמה מועדים מוצגים בהתחלה
+  MORE_STEP: 5,                  // כמה מועדים נוספים בכל לחיצה על "הצג עוד מועדים"
+  SERVER_VERSION: 2,             // חייב להתאים ל-SERVER_VERSION ב-Code.gs
   // ימי טוב שלא מוצגים לבחירה. להכללת יום כיפור: להשאיר מערך ריק.
   EXCLUDED_YOMTOV_TITLES: ['Yom Kippur']
 };
@@ -266,7 +268,7 @@ async function getRegistrations() {
 /* =====================  שכבת UI  ===================== */
 const state = {
   today: '', items: [], events: [], rows: [], view: { future: [], history: [] },
-  tab: 'future', showAll: false, selected: new Set(), editing: null, busy: false,
+  tab: 'future', shown: CONFIG.INITIAL_EVENTS_SHOWN, selected: new Set(), editing: null, busy: false,
   eventsError: false, regsError: '', regsLoaded: false, lastRegsFetch: 0, pickerHtml: ''
 };
 const $ = function (id) { return document.getElementById(id); };
@@ -292,13 +294,13 @@ function renderPicker() {
   $('pickerGroup').hidden = !!state.editing;
   let html;
   if (state.eventsError && !state.items.length) {
-    html = '<p class="empty">לא הצלחנו לטעון את רשימת האירועים. בדקו חיבור לאינטרנט ו<button type="button" class="link-btn" id="retryEvents">נסו שוב</button>.</p>';
+    html = '<p class="empty">לא הצלחנו לטעון את רשימת המועדים. בדקו חיבור לאינטרנט ו<button type="button" class="link-btn" id="retryEvents">נסו שוב</button>.</p>';
     more.hidden = true;
   } else if (!state.events.length) {
-    html = '<p class="empty">טוען אירועים...</p>';
+    html = '<p class="empty">טוען מועדים...</p>';
     more.hidden = true;
   } else {
-    const shown = state.showAll ? state.events : state.events.slice(0, CONFIG.INITIAL_EVENTS_SHOWN);
+    const shown = state.events.slice(0, state.shown);
     html = shown.map(function (ev) {
       const checked = state.selected.has(ev.key);
       return '<label class="event ' + ev.kind + (checked ? ' checked' : '') + '">' +
@@ -307,7 +309,7 @@ function renderPicker() {
         '<span class="event-date">' + esc(ev.dateText) + '</span>' +
         (ev.seq ? '<span class="event-seq">⚡ רצף חג-שבת</span>' : '') + '</span></label>';
     }).join('');
-    more.hidden = state.showAll || state.events.length <= CONFIG.INITIAL_EVENTS_SHOWN;
+    more.hidden = state.shown >= state.events.length;
   }
   if (html !== state.pickerHtml) { box.innerHTML = html; state.pickerHtml = html; }
 }
@@ -382,7 +384,7 @@ function startEdit(g) {
   state.selected.clear();
   $('name').value = g.name;
   $('formCard').classList.add('edit-mode');
-  $('editBanner').textContent = 'מצב עריכה: שינוי שם בהרשמה ל-' + g.label + '. לשינוי אירוע, מחקו והירשמו מחדש.';
+  $('editBanner').textContent = 'מצב עריכה: שינוי שם בהרשמה ל-' + g.label + '. לשינוי המועד, מחקו והירשמו מחדש.';
   $('editBanner').hidden = false;
   $('cancelBtn').hidden = false;
   $('submitBtn').textContent = 'עדכון שם';
@@ -404,6 +406,11 @@ async function runAction(payload, okText) {
   setMsg('שולח...', 'info');
   try {
     const data = await postJson(payload);
+    if (!data || data.ver !== CONFIG.SERVER_VERSION) {
+      // תשובה בלי מספר גרסה = הפריסה ב-Apps Script עדיין מריצה קוד ישן
+      setMsg('השרת עדיין בגרסה ישנה. מנהל האפליקציה צריך לעדכן את הפריסה ב-Apps Script (פריסה > ניהול פריסות > גרסה חדשה).', 'error');
+      return null;
+    }
     if (data.status === 'success') { setMsg(okText || 'נשמר', 'ok'); return data; }
     setMsg(data.message || 'לא ניתן לשמור', 'error');
     return data;
@@ -430,7 +437,7 @@ async function onSubmit(e) {
   }
 
   const chosen = state.events.filter(function (ev) { return state.selected.has(ev.key); });
-  if (!chosen.length) { setMsg('נא לסמן לפחות אירוע אחד.', 'error'); return; }
+  if (!chosen.length) { setMsg('נא לסמן לפחות שבת או חג אחד.', 'error'); return; }
 
   const taken = new Set(state.rows.map(function (r) { return normalizeName(r.name).toLowerCase() + '|' + String(r.date).slice(0, 10); }));
   const entries = [];
@@ -438,7 +445,7 @@ async function onSubmit(e) {
     ev.days.forEach(function (d) { entries.push({ date: d, eventKey: ev.key, eventName: ev.label }); });
   });
   if (entries.every(function (en) { return taken.has(name.toLowerCase() + '|' + en.date); })) {
-    setMsg('ההרשמה של ' + name + ' כבר קיימת באירועים שסומנו.', 'error');
+    setMsg('ההרשמה של ' + name + ' כבר קיימת במועדים שסומנו.', 'error');
     return;
   }
 
@@ -469,7 +476,7 @@ async function onDelete(g) {
 function bindUI() {
   $('regForm').addEventListener('submit', onSubmit);
   $('cancelBtn').addEventListener('click', resetForm);
-  $('moreBtn').addEventListener('click', function () { state.showAll = true; renderPicker(); });
+  $('moreBtn').addEventListener('click', function () { state.shown += CONFIG.MORE_STEP; renderPicker(); });
   $('eventPicker').addEventListener('change', function (e) {
     const t = e.target;
     if (!t.classList || !t.classList.contains('event-check')) return;
