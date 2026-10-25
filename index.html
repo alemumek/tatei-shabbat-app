@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#556B2F">
   <title>שבת וחג אצל טטיי</title>
-  <link rel="stylesheet" href="style.css?v=2.1">
+  <link rel="stylesheet" href="style.css?v=2.4">
 </head>
 <body>
 <main class="container">
@@ -24,7 +24,10 @@
       <fieldset class="form-group picker" id="pickerGroup">
         <legend>בחירת שבת/חג, <small>אפשר לסמן כמה</small></legend>
         <div class="event-list" id="eventPicker" aria-live="polite">טוען מועדים...</div>
-        <button type="button" class="btn btn-more" id="moreBtn" hidden>הצג עוד מועדים</button>
+        <div class="more-row" id="moreRow" hidden>
+          <button type="button" class="btn btn-more" id="moreBtn" hidden>הצג עוד מועדים</button>
+          <button type="button" class="btn btn-less" id="lessBtn" hidden>צמצם מועדים</button>
+        </div>
       </fieldset>
 
       <p class="form-msg" id="formMsg" role="status" aria-live="polite"></p>
@@ -49,8 +52,9 @@
   </div>
 
   <div class="cards-list" id="cardsContainer"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <noscript><p class="empty">האפליקציה דורשת JavaScript.</p></noscript>
 </main>
-<script src="app.js?v=2.1" defer></script>
+<script src="app.js?v=2.4" defer></script>
 </body>
 </html>
