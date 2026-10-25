@@ -1,4 +1,4 @@
-/* שבת וחג אצל טטיי - app.js v2.1
+/* שבת וחג אצל טטיי - app.js v2.4
    ארכיטקטורה: פונקציות טהורות (נבדקות ב-Node) + שכבת UI דקה.
    Hebcal נקרא עד 3 פעמים בכל 7 ימים (מטמון), ולא פעם לכל כרטיס. */
 'use strict';
@@ -203,6 +203,25 @@ function groupRegistrations(rows, events, todayStr) {
   return { future: future, history: history };
 }
 
+/* בין כל שתי הרשמות סמוכות: מועדים (שבת/חג) שאין אליהם נרשמים מקובצים לשורה אחת.
+   לא מציגים פער לפני ההרשמה הראשונה ואחרי האחרונה. maxLast מטפל בהרשמות שחופפות בזמן. */
+function buildFutureItems(groups, events) {
+  const registered = new Set(groups.map(function (g) { return g.key; }));
+  const items = [];
+  let maxLast = null;
+  groups.forEach(function (g) {
+    if (maxLast !== null) {
+      const gap = events.filter(function (ev) {
+        return !registered.has(ev.key) && ev.firstDay > maxLast && ev.lastDay < g.first;
+      });
+      if (gap.length) items.push({ type: 'gap', events: gap });
+    }
+    items.push({ type: 'card', g: g });
+    if (maxLast === null || g.last > maxLast) maxLast = g.last;
+  });
+  return items;
+}
+
 function buildShareMessage(name, chosen, url) {
   const lines = chosen.map(function (ev) {
     return (ev.kind === 'holiday' ? '🥂 חג: ' : '📅 ') + ev.label + ' (' + formatDays(ev.days) + ')';
@@ -279,6 +298,16 @@ function setMsg(text, type) {
   el.className = 'form-msg' + (type ? ' ' + type : '');
 }
 
+let toastTimer = null;
+function toast(text, type) {
+  const el = $('toast');
+  el.textContent = text; el.className = 'toast ' + (type || 'info'); el.hidden = false;
+  clearTimeout(toastTimer);
+  if (type !== 'info') toastTimer = setTimeout(function () { el.hidden = true; }, type === 'error' ? 8000 : 4000);
+}
+// פעולות שמופעלות מכרטיס ברשימה (מחיקה) מציגות הודעה צפה בתחתית המסך, כי הטופס יכול להיות מחוץ לתצוגה.
+function say(text, type, where) { if (where === 'toast') toast(text, type); else setMsg(text, type); }
+
 function rebuild() {
   // בלי נתוני Hebcal לא בונים אירועים בכלל: רשימת "שבתות בלבד" בלי חגים הייתה מטעה בשקט.
   state.events = state.items.length
@@ -295,10 +324,8 @@ function renderPicker() {
   let html;
   if (state.eventsError && !state.items.length) {
     html = '<p class="empty">לא הצלחנו לטעון את רשימת המועדים. בדקו חיבור לאינטרנט ו<button type="button" class="link-btn" id="retryEvents">נסו שוב</button>.</p>';
-    more.hidden = true;
   } else if (!state.events.length) {
     html = '<p class="empty">טוען מועדים...</p>';
-    more.hidden = true;
   } else {
     const shown = state.events.slice(0, state.shown);
     html = shown.map(function (ev) {
@@ -309,9 +336,37 @@ function renderPicker() {
         '<span class="event-date">' + esc(ev.dateText) + '</span>' +
         (ev.seq ? '<span class="event-seq">⚡ רצף חג-שבת</span>' : '') + '</span></label>';
     }).join('');
-    more.hidden = state.shown >= state.events.length;
   }
+  // "הצג עוד" מימין, "צמצם" משמאלו. צמצם מופיע רק אחרי שהורחבה הרשימה.
+  const canMore = state.events.length > 0 && state.shown < state.events.length;
+  const canLess = state.events.length > 0 && state.shown > CONFIG.INITIAL_EVENTS_SHOWN;
+  more.hidden = !canMore;
+  $('lessBtn').hidden = !canLess;
+  $('moreRow').hidden = !(canMore || canLess);
   if (html !== state.pickerHtml) { box.innerHTML = html; state.pickerHtml = html; }
+}
+
+function gapHtml(it) {
+  const n = it.events.length;
+  return '<section class="gap" aria-label="מועדים בלי נרשמים"><div class="gap-title">⚠️ ' +
+    (n === 1 ? 'מועד אחד בלי נרשמים' : n + ' מועדים בלי נרשמים') + '</div><ul class="gap-list">' +
+    it.events.map(function (ev) {
+      return '<li class="gap-item"><span class="gap-info"><span class="gap-name">' + esc(ev.label) + '</span>' +
+        '<span class="gap-date">' + esc(ev.dateText) + '</span></span>' +
+        '<button type="button" class="btn btn-reg" data-act="reg" data-key="' + esc(ev.key) + '">הירשמו</button></li>';
+    }).join('') + '</ul></section>';
+}
+
+// "הירשמו" בשורת מועדים ריקים: מסמן את המועד בטופס (ומרחיב את הרשימה אם צריך) וגולל אליו
+function selectEvent(key) {
+  if (state.editing) resetForm();
+  const idx = state.events.findIndex(function (e) { return e.key === key; });
+  if (idx < 0) return;
+  if (idx >= state.shown) state.shown = idx + 1;
+  state.selected.add(key);
+  renderPicker();
+  setMsg('סומן: ' + state.events[idx].label + '. הזינו שם ולחצו "אישור הרשמה".', 'info');
+  $('formCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderCards() {
@@ -324,7 +379,10 @@ function renderCards() {
   if (!state.regsLoaded) { box.innerHTML = '<p class="empty">טוען הרשמות...</p>'; return; }
   if (!list.length) { box.innerHTML = '<p class="empty">אין הרשמות להצגה בלשונית זו.</p>'; return; }
   const isFuture = state.tab === 'future';
-  box.innerHTML = list.map(function (g, i) {
+  const items = isFuture ? buildFutureItems(list, state.events) : list.map(function (g) { return { type: 'card', g: g }; });
+  box.innerHTML = items.map(function (it) {
+    if (it.type === 'gap') return gapHtml(it);
+    const g = it.g, i = list.indexOf(g);
     return '<article class="card ' + g.kind + (isFuture ? '' : ' history') + '">' +
       '<div class="card-main"><div class="card-title">' + esc(g.name) + '</div>' +
       '<div class="card-date">' + esc(g.spanText) + '</div>' +
@@ -399,23 +457,23 @@ function friendlyError(e) {
   return 'שגיאת תקשורת. בדקו חיבור לאינטרנט ונסו שוב.';
 }
 
-async function runAction(payload, okText) {
+async function runAction(payload, okText, where) {
   if (state.busy) return null;
   state.busy = true;
   $('submitBtn').disabled = true;
-  setMsg('שולח...', 'info');
+  say(where === 'toast' ? 'מוחק...' : 'שולח...', 'info', where);
   try {
     const data = await postJson(payload);
     if (!data || data.ver !== CONFIG.SERVER_VERSION) {
       // תשובה בלי מספר גרסה = הפריסה ב-Apps Script עדיין מריצה קוד ישן
-      setMsg('השרת עדיין בגרסה ישנה. מנהל האפליקציה צריך לעדכן את הפריסה ב-Apps Script (פריסה > ניהול פריסות > גרסה חדשה).', 'error');
+      say('השרת עדיין בגרסה ישנה. מנהל האפליקציה צריך לעדכן את הפריסה ב-Apps Script (פריסה > ניהול פריסות > גרסה חדשה).', 'error', where);
       return null;
     }
-    if (data.status === 'success') { setMsg(okText || 'נשמר', 'ok'); return data; }
-    setMsg(data.message || 'לא ניתן לשמור', 'error');
+    if (data.status === 'success') { say(okText || 'נשמר', 'ok', where); return data; }
+    say(data.message || 'לא ניתן לשמור', 'error', where);
     return data;
   } catch (e) {
-    setMsg(friendlyError(e), 'error');
+    say(friendlyError(e), 'error', where);
     return null;
   } finally {
     state.busy = false;
@@ -453,6 +511,7 @@ async function onSubmit(e) {
   if (data && data.status === 'success') {
     showShare(name, chosen);
     const extra = data.skipped && data.skipped.length ? ' (' + data.skipped.length + ' ימים כבר היו רשומים)' : '';
+    state.shown = CONFIG.INITIAL_EVENTS_SHOWN; // אחרי רישום מוצלח הרשימה חוזרת להיות קצרה
     resetForm();
     setMsg('ההרשמה התקבלה' + extra, 'ok');
     await refreshRegs(); render();
@@ -469,7 +528,7 @@ function showShare(name, chosen) {
 
 async function onDelete(g) {
   if (!window.confirm('למחוק את ההרשמה של ' + g.name + ' (' + g.label + ')?')) return;
-  const data = await runAction({ action: 'delete', ids: g.ids }, 'ההרשמה נמחקה');
+  const data = await runAction({ action: 'delete', ids: g.ids }, 'ההרשמה נמחקה', 'toast');
   if (data && data.status === 'success') { await refreshRegs(); render(); }
 }
 
@@ -477,6 +536,11 @@ function bindUI() {
   $('regForm').addEventListener('submit', onSubmit);
   $('cancelBtn').addEventListener('click', resetForm);
   $('moreBtn').addEventListener('click', function () { state.shown += CONFIG.MORE_STEP; renderPicker(); });
+  $('lessBtn').addEventListener('click', function () {
+    state.shown = CONFIG.INITIAL_EVENTS_SHOWN; renderPicker();
+    $('pickerGroup').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+  $('toast').addEventListener('click', function () { $('toast').hidden = true; });
   $('eventPicker').addEventListener('change', function (e) {
     const t = e.target;
     if (!t.classList || !t.classList.contains('event-check')) return;
@@ -490,6 +554,7 @@ function bindUI() {
   $('cardsContainer').addEventListener('click', function (e) {
     const b = e.target.closest ? e.target.closest('button[data-act]') : null;
     if (!b) return;
+    if (b.getAttribute('data-act') === 'reg') { selectEvent(b.getAttribute('data-key')); return; }
     const g = state.view.future[Number(b.getAttribute('data-i'))];
     if (!g) return;
     if (b.getAttribute('data-act') === 'edit') startEdit(g); else onDelete(g);
@@ -524,7 +589,7 @@ async function init() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { buildEvents: buildEvents, groupRegistrations: groupRegistrations, normalizeName: normalizeName,
+  module.exports = { buildEvents: buildEvents, buildFutureItems: buildFutureItems, groupRegistrations: groupRegistrations, normalizeName: normalizeName,
     formatDays: formatDays, buildShareMessage: buildShareMessage, addDays: addDays, esc: esc, toDateStr: toDateStr,
     eventsCacheIsFresh: eventsCacheIsFresh, CONFIG: CONFIG };
 }
