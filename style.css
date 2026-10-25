@@ -1,4 +1,4 @@
-/* שבת וחג אצל טטיי - style.css v2.1
+/* שבת וחג אצל טטיי - style.css v2.4
    עקרונות: גופן בסיס 18px, יעדי מגע 44px ומעלה, ניגודיות AA, מרווחים קומפקטיים כדי
    שרשימת ההרשמות תופיע במסך הראשון, בלי תלות ב-hover. */
 :root {
@@ -86,7 +86,9 @@ input[type="text"]:focus-visible, .btn:focus-visible, .tab-btn:focus-visible, .e
 .btn-submit { background: var(--olive); }
 .form-card.edit-mode .btn-submit { background: var(--terracotta); }
 .btn-cancel { background: #5F5F5F; }
-.btn-more { width: 100%; min-height: 44px; margin-top: 8px; background: #fff; color: var(--olive-dark); border: 2px solid var(--olive); }
+.more-row { display: flex; gap: 8px; margin-top: 8px; }
+.more-row .btn { flex: 1; min-height: 44px; padding: 4px 8px; background: #fff; border: 2px solid var(--olive); color: var(--olive-dark); }
+.more-row .btn-less { border-color: #5F5F5F; color: #444; }
 .btn-whatsapp { background: #167F3D; width: 100%; }
 .link-btn { background: none; border: 0; padding: 0; font: inherit; color: #1D4ED8; text-decoration: underline; cursor: pointer; }
 
@@ -135,3 +137,23 @@ input[type="text"]:focus-visible, .btn:focus-visible, .tab-btn:focus-visible, .e
 .empty { text-align: center; color: var(--muted); padding: 12px 0; margin: 0; }
 
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+
+/* הודעה צפה בתחתית המסך (מחיקה וכד'), נשארת בטווח הראייה גם כשהטופס מחוץ למסך */
+.toast {
+  position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  max-width: 576px; margin: 0 auto; padding: 12px 14px; border-radius: 10px;
+  font-weight: bold; color: #fff; z-index: 50; box-shadow: 0 4px 14px rgba(0,0,0,0.3); cursor: pointer;
+}
+.toast.ok { background: #2E6B2E; }
+.toast.error { background: #9B1C1C; }
+.toast.info { background: #444; }
+
+/* שורת מועדים בלי נרשמים (בין שתי הרשמות) */
+.gap { background: var(--warn-bg); border: 2px dashed #B58900; border-radius: 12px; padding: 8px 10px; color: var(--warn-text); }
+.gap-title { font-weight: bold; margin-bottom: 4px; }
+.gap-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.gap-item { display: flex; align-items: center; gap: 10px; }
+.gap-info { flex: 1; min-width: 0; }
+.gap-name { display: block; font-weight: bold; }
+.gap-date { display: block; font-size: 0.9rem; }
+.gap .btn { min-height: 44px; min-width: 84px; padding: 4px 10px; font-size: 0.95rem; background: var(--olive); }
