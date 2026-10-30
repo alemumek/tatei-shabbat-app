@@ -1,598 +1,575 @@
-/* שבת וחג אצל טטיי - app.js v2.4
-   ארכיטקטורה: פונקציות טהורות (נבדקות ב-Node) + שכבת UI דקה.
-   Hebcal נקרא עד 3 פעמים בכל 7 ימים (מטמון), ולא פעם לכל כרטיס. */
+/* שבת וחג אצל טטיי - app.js v3.0.0
+   שכבת UI ורשת בלבד. כל הלוגיקה הטהורה ב-logic.js (נטען לפניו).
+   אין innerHTML עם נתונים: DOM נבנה ב-createElement ו-textContent (העזר h). */
 'use strict';
-
 const CONFIG = {
-  GAS_URL: 'https://script.google.com/macros/s/AKfycbyeLEhyGVsbe_1eMbFDAXDCV5x9OOPw9jvzspdSsPbqDzS3pn0ZIPp5qiSd7ZQ89vO6/exec',
-  HORIZON_DAYS: 270,             // כמה ימים קדימה מציגים אירועים
-  CHUNK_DAYS: 100,               // גודל טווח בקריאה אחת ל-Hebcal
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbyeLEhyGVsbe_1eMbFDAXDCV5x9OOPw9jvzspdSsPbqDzS3pn0ZIPp5qiSd7ZQ89vO6/exec', /* להדביק כאן את הכתובת הקיימת מ-app.js החי (GAS_URL), בלי לשנות */
+  HORIZON_DAYS: 270, // כמה ימים קדימה מציגים אירועים
+  CHUNK_DAYS: 100,   // גודל טווח בקריאה אחת ל-Hebcal
   EVENTS_CACHE_MAX_AGE_MS: 7 * 24 * 60 * 60 * 1000,
-  INITIAL_EVENTS_SHOWN: 3,       // כמה מועדים מוצגים בהתחלה
-  MORE_STEP: 5,                  // כמה מועדים נוספים בכל לחיצה על "הצג עוד מועדים"
-  SERVER_VERSION: 2,             // חייב להתאים ל-SERVER_VERSION ב-Code.gs
+  REGS_REFRESH_AFTER_MS: 60 * 1000,
+  INITIAL_EVENTS_SHOWN: 3, // כמה מועדים מוצגים בהתחלה
+  MORE_STEP: 5,            // כמה מועדים נוספים בכל לחיצה על "הצג עוד מועדים"
+  SERVER_VERSION: 3,       // חייב להתאים ל-SERVER_VERSION ב-Code.gs
+  CLIENT_VERSION: '3.0.0',
+  MAX_NAME: 40, MAX_ENTRIES: 20,
   // ימי טוב שלא מוצגים לבחירה. להכללת יום כיפור: להשאיר מערך ריק.
   EXCLUDED_YOMTOV_TITLES: ['Yom Kippur']
 };
+const LS = { EVENTS: 'tatay.events.v3', REGS: 'tatay.regs.v3', PARASHA: 'tatay.parasha.v3' };
+const HEBCAL_URL = 'https://www.hebcal.com/hebcal';
 
-const LS_EVENTS = 'tatay.events.v2';
-const LS_REGS = 'tatay.regs.v2';
-const DAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-
-/* ---------- עזרי תאריך (זמן מקומי בלבד, בלי toISOString) ---------- */
-function pad2(n) { return String(n).padStart(2, '0'); }
-function toDateStr(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
-function parseDateStr(s) {
-  const p = String(s).slice(0, 10).split('-').map(Number);
-  return new Date(p[0], p[1] - 1, p[2], 12, 0, 0); // צהריים: מונע בעיות מעבר שעון
-}
-function addDays(s, n) { const d = parseDateStr(s); d.setDate(d.getDate() + n); return toDateStr(d); }
-function dow(s) { return parseDateStr(s).getDay(); }
-function fmtDM(s) { const p = s.split('-'); return p[2] + '/' + p[1]; }
-function fmtDMY(s) { const p = s.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
-function formatDays(days) {
-  const first = days[0], last = days[days.length - 1];
-  if (first === last) return 'יום ' + DAY_NAMES[dow(first)] + ', ' + fmtDMY(first);
-  return DAY_NAMES[dow(first)] + ' ' + fmtDM(first) + ' - ' + DAY_NAMES[dow(last)] + ' ' + fmtDMY(last);
-}
-
-/* ---------- ניקוי טקסט ---------- */
-function normalizeName(s) {
-  return String(s == null ? '' : s)
-    .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '')
-    .replace(/\s+/g, ' ').trim()
-    .replace(/^[=+\-@]+/, '').trim();
-}
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, function (c) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-  });
-}
-
-/* ---------- בניית רשימת האירועים מתוך פריטי Hebcal ---------- */
-function holidayLabel(group, yomtov) {
-  const names = [];
-  group.forEach(function (d) { yomtov.get(d).forEach(function (n) { names.push(n); }); });
-  const cleaned = names.map(function (n) { return n.replace(/\s*\d{4}\s*$/, '').trim(); });
-  let uniq = Array.from(new Set(cleaned));
-  if (group.length > 1 && uniq.length > 1) {
-    // ראש השנה: "ראש השנה" + "ראש השנה ב׳" -> "ראש השנה"
-    const stripped = Array.from(new Set(uniq.map(function (n) { return n.replace(/\s+[א-ת][׳']$/, '').trim(); })));
-    if (stripped.length === 1) uniq = stripped;
-  }
-  return uniq.join(' / ');
-}
-
-function buildEvents(items, todayStr, endStr, excludedTitles) {
-  excludedTitles = excludedTitles || [];
-  const yomtov = new Map();      // תאריך -> שמות עבריים של ימי טוב
-  const parasha = new Map();     // תאריך שבת -> פרשה
-  const shabbatNote = new Map(); // תאריך -> "שבת ..." מיוחדת (לא יום טוב)
-
-  (items || []).forEach(function (it) {
-    const date = String(it.date || '').slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
-    if (it.category === 'parashat') {
-      parasha.set(date, it.hebrew || it.title || '');
-    } else if (it.category === 'holiday') {
-      if (it.yomtov === true) {
-        const title = String(it.title || '');
-        if (excludedTitles.some(function (x) { return title.indexOf(x) === 0; })) return;
-        if (!yomtov.has(date)) yomtov.set(date, []);
-        yomtov.get(date).push(it.hebrew || title);
-      } else if (/^שבת/.test(it.hebrew || '')) {
-        shabbatNote.set(date, it.hebrew);
-      }
-    }
-  });
-
-  const events = [];
-
-  // 1. אירועי חג: ימי טוב רצופים הם כרטיס אחד. חול המועד אינו יום טוב, לכן
-  //    סוכות/פסח מתפצלים אוטומטית ליום טוב ראשון ויום טוב אחרון.
-  const ytDates = Array.from(yomtov.keys()).sort();
-  let group = [];
-  function flush() {
-    if (!group.length) return;
-    events.push({
-      key: 'H-' + group[0], kind: 'holiday',
-      label: holidayLabel(group, yomtov), days: group.slice()
-    });
-    group = [];
-  }
-  ytDates.forEach(function (d) {
-    if (group.length && addDays(group[group.length - 1], 1) !== d) flush();
-    group.push(d);
-  });
-  flush();
-
-  // 2. אירועי שבת: שישי + שבת, למעט יום שכבר שייך לכרטיס חג.
-  let sat = addDays(todayStr, -3);
-  while (dow(sat) !== 6) sat = addDays(sat, 1);
-  for (; sat <= endStr; sat = addDays(sat, 7)) {
-    const fri = addDays(sat, -1);
-    const days = [];
-    if (!yomtov.has(fri)) days.push(fri);
-    if (!yomtov.has(sat)) days.push(sat);
-    if (!days.length) continue;
-    let label;
-    const p = parasha.get(sat);
-    if (days.length === 1 && days[0] === fri) label = 'שישי - ערב חג';
-    else if (p) label = 'שבת ' + (/^פרשת/.test(p) ? p : 'פרשת ' + p);
-    else label = shabbatNote.get(sat) || shabbatNote.get(fri) || 'שבת';
-    events.push({ key: 'S-' + sat, kind: 'shabbat', label: label, days: days });
-  }
-
-  events.forEach(function (e) {
-    e.allDays = e.days.slice();
-    e.seq = false;
-  });
-  events.sort(function (a, b) { return a.allDays[0] < b.allDays[0] ? -1 : a.allDays[0] > b.allDays[0] ? 1 : 0; });
-
-  // 3. רצף חג-שבת: שני אירועים מסוגים שונים שצמודים ביום.
-  for (let i = 1; i < events.length; i++) {
-    const p = events[i - 1], c = events[i];
-    if (p.kind !== c.kind && addDays(p.allDays[p.allDays.length - 1], 1) === c.allDays[0]) {
-      p.seq = true; c.seq = true;
-    }
-  }
-
-  // 4. מסנן עבר ואחרי האופק; ימים שעברו לא נשמרים ברישום.
-  return events.filter(function (e) {
-    e.days = e.days.filter(function (d) { return d >= todayStr; });
-    return e.days.length > 0 && e.allDays[0] <= endStr;
-  }).map(function (e) {
-    e.firstDay = e.days[0];
-    e.lastDay = e.allDays[e.allDays.length - 1];
-    e.dateText = formatDays(e.days);
-    return e;
-  });
-}
-
-/* ---------- קיבוץ שורות הגיליון (שורה ליום) להרשמות ---------- */
-function fallbackKey(date, eventName) {
-  if (eventName && !/^שבת/.test(eventName)) return 'H-' + date;
-  const d = dow(date);
-  if (d === 5) return 'S-' + addDays(date, 1);
-  if (d === 6) return 'S-' + date;
-  return 'D-' + date;
-}
-
-function groupRegistrations(rows, events, todayStr) {
-  const byDate = new Map(), byKey = new Map();
-  events.forEach(function (ev) {
-    byKey.set(ev.key, ev);
-    ev.days.forEach(function (d) { byDate.set(d, ev); });
-  });
-  const groups = new Map();
-  (rows || []).forEach(function (r) {
-    const date = String(r.date || '').slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
-    const name = normalizeName(r.name);
-    if (!name) return;
-    const ev = byDate.get(date);
-    const key = r.eventKey || (ev ? ev.key : fallbackKey(date, r.eventName));
-    const gk = name + '|' + key;
-    let g = groups.get(gk);
-    if (!g) { g = { name: name, key: key, ids: [], dates: [], eventName: '' }; groups.set(gk, g); }
-    g.ids.push(r.id);
-    g.dates.push(date);
-    if (!g.eventName && r.eventName) g.eventName = r.eventName;
-  });
-
-  const future = [], history = [];
-  groups.forEach(function (g) {
-    g.dates = Array.from(new Set(g.dates)).sort();
-    const ev = byKey.get(g.key) || null;
-    g.kind = g.key.indexOf('H-') === 0 ? 'holiday' : 'shabbat';
-    g.label = ev ? ev.label : (g.eventName || (g.kind === 'holiday' ? 'חג' : 'שבת'));
-    g.seq = !!(ev && ev.seq);
-    let span = ev ? ev.allDays : g.dates;
-    if (!ev && g.dates.length === 1 && g.kind === 'shabbat') {
-      const d = g.dates[0];
-      span = dow(d) === 5 ? [d, addDays(d, 1)] : dow(d) === 6 ? [addDays(d, -1), d] : [d];
-    }
-    g.spanText = formatDays(span);
-    g.first = span[0];
-    g.last = span[span.length - 1];
-    (g.last >= todayStr ? future : history).push(g);
-  });
-  const byNameHe = function (a, b) { return a.name.localeCompare(b.name, 'he'); };
-  future.sort(function (a, b) { return a.first < b.first ? -1 : a.first > b.first ? 1 : byNameHe(a, b); });
-  history.sort(function (a, b) { return a.first < b.first ? 1 : a.first > b.first ? -1 : byNameHe(a, b); });
-  return { future: future, history: history };
-}
-
-/* בין כל שתי הרשמות סמוכות: מועדים (שבת/חג) שאין אליהם נרשמים מקובצים לשורה אחת.
-   לא מציגים פער לפני ההרשמה הראשונה ואחרי האחרונה. maxLast מטפל בהרשמות שחופפות בזמן. */
-function buildFutureItems(groups, events) {
-  const registered = new Set(groups.map(function (g) { return g.key; }));
-  const items = [];
-  let maxLast = null;
-  groups.forEach(function (g) {
-    if (maxLast !== null) {
-      const gap = events.filter(function (ev) {
-        return !registered.has(ev.key) && ev.firstDay > maxLast && ev.lastDay < g.first;
-      });
-      if (gap.length) items.push({ type: 'gap', events: gap });
-    }
-    items.push({ type: 'card', g: g });
-    if (maxLast === null || g.last > maxLast) maxLast = g.last;
-  });
-  return items;
-}
-
-function buildShareMessage(name, chosen, url) {
-  const lines = chosen.map(function (ev) {
-    return (ev.kind === 'holiday' ? '🥂 חג: ' : '📅 ') + ev.label + ' (' + formatDays(ev.days) + ')';
-  }).join('\n');
-  return 'מה נשמע שבט מלקו? ✨\nלידיעתכם 📌\nרשימת שבת/חג אצל טטיי התעדכנה 🌾\n' +
-    '👨‍👩‍👧‍👦 משפחה: ' + name + '\n' + lines + '\n🔗 לצפייה והרשמה: ' + url + '\nהמשך יום נפלא! 😃';
-}
-
-/* ---------- Hebcal + מטמון ---------- */
-async function fetchHebcalChunk(startStr, endStr) {
-  const url = 'https://www.hebcal.com/hebcal?v=1&cfg=json&maj=on&s=on&i=on&start=' + startStr + '&end=' + endStr;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Hebcal HTTP ' + res.status);
-  const data = await res.json();
-  return (data.items || []).filter(function (it) {
-    return it.category === 'parashat' ||
-      (it.category === 'holiday' && (it.yomtov === true || /^שבת/.test(it.hebrew || '')));
-  }).map(function (it) {
-    return { date: it.date, category: it.category, yomtov: it.yomtov === true, title: it.title, hebrew: it.hebrew };
-  });
-}
-
-async function fetchEventItems(todayStr) {
-  const start = addDays(todayStr, -3), end = addDays(todayStr, CONFIG.HORIZON_DAYS);
-  const ranges = [];
-  for (let s = start; s <= end; s = addDays(s, CONFIG.CHUNK_DAYS + 1)) {
-    const e = addDays(s, CONFIG.CHUNK_DAYS);
-    ranges.push([s, e < end ? e : end]);
-  }
-  const parts = await Promise.all(ranges.map(function (r) { return fetchHebcalChunk(r[0], r[1]); }));
-  return [].concat.apply([], parts);
-}
-
-function readCache(key) {
-  try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; }
-}
-function writeCache(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* מצב פרטי / מלא - מתעלמים */ }
-}
-function eventsCacheIsFresh(c, todayStr) {
-  return !!(c && Array.isArray(c.items) && c.fetchedAt &&
-    Date.now() - c.fetchedAt < CONFIG.EVENTS_CACHE_MAX_AGE_MS &&
-    addDays(c.from, CONFIG.HORIZON_DAYS) >= addDays(todayStr, 120));
-}
-
-/* ---------- שרת (GAS) ---------- */
-async function postJson(payload) {
-  const res = await fetch(CONFIG.GAS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // בלי preflight
-    body: JSON.stringify(payload)
-  });
-  const text = await res.text();
-  try { return JSON.parse(text); } catch (e) { throw new Error('NON_JSON'); }
-}
-async function getRegistrations() {
-  const res = await fetch(CONFIG.GAS_URL);
-  const data = await res.json();
-  if (!Array.isArray(data)) throw new Error((data && data.message) || 'תשובה לא צפויה מהשרת');
-  return data;
-}
-
-/* =====================  שכבת UI  ===================== */
-const state = {
-  today: '', items: [], events: [], rows: [], view: { future: [], history: [] },
-  tab: 'future', shown: CONFIG.INITIAL_EVENTS_SHOWN, selected: new Set(), editing: null, busy: false,
-  eventsError: false, regsError: '', regsLoaded: false, lastRegsFetch: 0, pickerHtml: ''
+const STR = {
+  submit: 'אישור הרשמה', update: 'עדכון הרשמה', sending: 'שולח...',
+  loadingEvents: 'טוען מועדים...', loadingRegs: 'טוען הרשמות...',
+  eventsErr: 'לא הצלחנו לטעון את רשימת המועדים. בדקו חיבור לאינטרנט.',
+  regsErr: (m) => 'לא הצלחנו לטעון את ההרשמות. ' + m,
+  retry: 'נסו שוב', empty: 'אין הרשמות להצגה בלשונית זו.',
+  cached: 'מוצגים נתונים שמורים. אין חיבור לאינטרנט.',
+  errNet: 'שגיאת תקשורת. בדקו חיבור לאינטרנט ונסו שוב.',
+  errOld: 'השרת עדיין בגרסה ישנה. מנהל האפליקציה צריך לעדכן את הפריסה ב-Apps Script (פריסה > ניהול פריסות > גרסה חדשה).',
+  errDeploy: 'השרת החזיר תשובה לא תקינה. יש לוודא שהפריסה ב-Google Apps Script מוגדרת לגישה "Anyone".',
+  errConfig: 'כתובת השרת לא הוגדרה (CONFIG.GAS_URL ב-app.js).',
+  noName: 'נא להזין שם משפחה.', noEvent: 'נא לסמן לפחות שבת או חג אחד.',
+  tooMany: 'אפשר לסמן עד ' + CONFIG.MAX_ENTRIES + ' ימים בבת אחת.',
+  dup: (name) => 'ההרשמה של ' + name + ' כבר קיימת במועדים שסומנו.',
+  saved: 'ההרשמה התקבלה', updated: 'ההרשמה עודכנה', noChange: 'לא בוצע שינוי', deleted: 'ההרשמה נמחקה',
+  partial: (n) => 'ההרשמה התקבלה (' + (n === 1 ? 'יום אחד כבר היה רשום' : n + ' ימים כבר היו רשומים') + ')',
+  picked: (label) => 'סומן: ' + label + '. הזינו שם ולחצו "' + STR.submit + '".',
+  editBanner: (g) => 'מצב עריכה: ' + g.name + ', ' + g.label + '. אפשר לשנות את השם ו/או את המועד.',
+  shareSaved: '✨ ההרשמה התקבלה בהצלחה!', shareUpdated: '✨ ההרשמה עודכנה בהצלחה!',
+  edit: 'עריכה', del: 'מחיקה', signup: 'הירשמו', seq: '⚡ רצף חג-שבת',
+  delMsg: (g) => 'למחוק את ההרשמה של ' + g.name + ' (' + g.label + ')?',
+  gapTitle: (n) => '⚠️ ' + (n === 1 ? 'מועד אחד בלי נרשמים' : n + ' מועדים בלי נרשמים'),
+  version: (v) => 'גרסה ' + v, server: (v) => ' · שרת ' + v
 };
-const $ = function (id) { return document.getElementById(id); };
 
-function setMsg(text, type) {
-  const el = $('formMsg');
-  el.textContent = text || '';
-  el.className = 'form-msg' + (type ? ' ' + type : '');
+const state = {
+  hebItems: [], eventsStatus: 'loading',          // loading | ok | stale | error
+  rows: [], regsStatus: 'loading', regsError: '', // loading | ok | cached | error
+  events: [], groups: { future: [], history: [] }, items: [],
+  parashaMap: new Map(), parashaBusy: false,
+  selectedKeys: new Set(), shown: CONFIG.INITIAL_EVENTS_SHOWN,
+  editing: null,  // { ids, name, key, label, trigger }
+  deleting: null, deleteTrigger: null,
+  tab: 'future', busy: false, today: '', lastRegsFetch: 0, regsInflight: null,
+  pickerSig: '', namesSig: '', deferredInstall: null
+};
+
+/* ---------- עזרים ---------- */
+const $ = (id) => document.getElementById(id);
+function h(tag, props, children) {
+  const e = document.createElement(tag);
+  Object.keys(props || {}).forEach(function (k) {
+    const v = props[k];
+    if (v == null || v === false) return;
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k === 'data') Object.keys(v).forEach(function (d) { e.dataset[d] = v[d]; });
+    else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  });
+  (children || []).forEach(function (c) { if (c != null && c !== false) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+  return e;
 }
+function todayStr() { return toDateStr(new Date()); }
+function lsGet(key) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+function lsSet(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* מצב פרטי / מלא - מתעלמים */ } }
+function reducedMotion() { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+function scrollToEl(el) { el.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' }); }
+function appUrl() { return location.origin + location.pathname; }
 
+// הודעות הטופס: הצלחה ומידע ב-role=status, שגיאה ב-role=alert. אייקון לפי הסוג (לא רק צבע).
+function setMsg(text, type) {
+  const ok = $('formMsg'), err = $('formErr');
+  ok.textContent = type === 'error' ? '' : (text || '');
+  ok.className = 'form-msg' + (type && type !== 'error' ? ' ' + type : '');
+  err.textContent = type === 'error' ? text : '';
+}
+function clearFormMessages() { setMsg(''); $('shareBox').hidden = true; }
+// הודעה צפה בתחתית המסך: לפעולות מהרשימה, כי הטופס יכול להיות מחוץ לתצוגה
 let toastTimer = null;
 function toast(text, type) {
   const el = $('toast');
-  el.textContent = text; el.className = 'toast ' + (type || 'info'); el.hidden = false;
+  el.textContent = text; el.className = 'toast ' + (type || 'ok'); el.hidden = false;
   clearTimeout(toastTimer);
-  if (type !== 'info') toastTimer = setTimeout(function () { el.hidden = true; }, type === 'error' ? 8000 : 4000);
-}
-// פעולות שמופעלות מכרטיס ברשימה (מחיקה) מציגות הודעה צפה בתחתית המסך, כי הטופס יכול להיות מחוץ לתצוגה.
-function say(text, type, where) { if (where === 'toast') toast(text, type); else setMsg(text, type); }
-
-function rebuild() {
-  // בלי נתוני Hebcal לא בונים אירועים בכלל: רשימת "שבתות בלבד" בלי חגים הייתה מטעה בשקט.
-  state.events = state.items.length
-    ? buildEvents(state.items, state.today, addDays(state.today, CONFIG.HORIZON_DAYS), CONFIG.EXCLUDED_YOMTOV_TITLES)
-    : [];
-  const keys = new Set(state.events.map(function (e) { return e.key; }));
-  state.selected.forEach(function (k) { if (!keys.has(k)) state.selected.delete(k); });
-  state.view = groupRegistrations(state.rows, state.events, state.today);
+  toastTimer = setTimeout(function () { el.hidden = true; }, type === 'error' ? 8000 : 4000);
 }
 
-function renderPicker() {
-  const box = $('eventPicker'), more = $('moreBtn');
-  $('pickerGroup').hidden = !!state.editing;
-  let html;
-  if (state.eventsError && !state.items.length) {
-    html = '<p class="empty">לא הצלחנו לטעון את רשימת המועדים. בדקו חיבור לאינטרנט ו<button type="button" class="link-btn" id="retryEvents">נסו שוב</button>.</p>';
-  } else if (!state.events.length) {
-    html = '<p class="empty">טוען מועדים...</p>';
-  } else {
-    const shown = state.events.slice(0, state.shown);
-    html = shown.map(function (ev) {
-      const checked = state.selected.has(ev.key);
-      return '<label class="event ' + ev.kind + (checked ? ' checked' : '') + '">' +
-        '<input type="checkbox" class="event-check" data-key="' + esc(ev.key) + '"' + (checked ? ' checked' : '') + '>' +
-        '<span class="event-body"><span class="event-title">' + esc(ev.label) + '</span>' +
-        '<span class="event-date">' + esc(ev.dateText) + '</span>' +
-        (ev.seq ? '<span class="event-seq">⚡ רצף חג-שבת</span>' : '') + '</span></label>';
-    }).join('');
-  }
-  // "הצג עוד" מימין, "צמצם" משמאלו. צמצם מופיע רק אחרי שהורחבה הרשימה.
-  const canMore = state.events.length > 0 && state.shown < state.events.length;
-  const canLess = state.events.length > 0 && state.shown > CONFIG.INITIAL_EVENTS_SHOWN;
-  more.hidden = !canMore;
-  $('lessBtn').hidden = !canLess;
-  $('moreRow').hidden = !(canMore || canLess);
-  if (html !== state.pickerHtml) { box.innerHTML = html; state.pickerHtml = html; }
+/* ---------- רשת: Hebcal ---------- */
+function hebcalUrl(start, end, withMajor) {
+  return HEBCAL_URL + '?v=1&cfg=json&' + (withMajor ? 'maj=on&' : '') + 's=on&i=on&start=' + start + '&end=' + end;
 }
-
-function gapHtml(it) {
-  const n = it.events.length;
-  return '<section class="gap" aria-label="מועדים בלי נרשמים"><div class="gap-title">⚠️ ' +
-    (n === 1 ? 'מועד אחד בלי נרשמים' : n + ' מועדים בלי נרשמים') + '</div><ul class="gap-list">' +
-    it.events.map(function (ev) {
-      return '<li class="gap-item"><span class="gap-info"><span class="gap-name">' + esc(ev.label) + '</span>' +
-        '<span class="gap-date">' + esc(ev.dateText) + '</span></span>' +
-        '<button type="button" class="btn btn-reg" data-act="reg" data-key="' + esc(ev.key) + '">הירשמו</button></li>';
-    }).join('') + '</ul></section>';
+async function fetchHebcal(start, end, parashaOnly) {
+  const parts = await Promise.all(chunkRanges(start, end, CONFIG.CHUNK_DAYS).map(async function (r) {
+    const res = await fetch(hebcalUrl(r[0], r[1], !parashaOnly));
+    if (!res.ok) throw new Error('Hebcal HTTP ' + res.status);
+    return normalizeHebcal(await res.json(), parashaOnly);
+  }));
+  return [].concat.apply([], parts);
 }
-
-// "הירשמו" בשורת מועדים ריקים: מסמן את המועד בטופס (ומרחיב את הרשימה אם צריך) וגולל אליו
-function selectEvent(key) {
-  if (state.editing) resetForm();
-  const idx = state.events.findIndex(function (e) { return e.key === key; });
-  if (idx < 0) return;
-  if (idx >= state.shown) state.shown = idx + 1;
-  state.selected.add(key);
-  renderPicker();
-  setMsg('סומן: ' + state.events[idx].label + '. הזינו שם ולחצו "אישור הרשמה".', 'info');
-  $('formCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function renderCards() {
-  const box = $('cardsContainer');
-  const list = state.view[state.tab];
-  if (state.regsError && !state.regsLoaded) {
-    box.innerHTML = '<p class="empty">לא הצלחנו לטעון את ההרשמות (' + esc(state.regsError) + ').</p>';
+async function loadEvents() {
+  const today = todayStr();
+  const cache = lsGet(LS.EVENTS);
+  if (eventsCacheValid(cache, today, Date.now(), CONFIG.EVENTS_CACHE_MAX_AGE_MS, CONFIG.HORIZON_DAYS)) {
+    state.hebItems = cache.items; state.eventsStatus = 'ok';
     return;
   }
-  if (!state.regsLoaded) { box.innerHTML = '<p class="empty">טוען הרשמות...</p>'; return; }
-  if (!list.length) { box.innerHTML = '<p class="empty">אין הרשמות להצגה בלשונית זו.</p>'; return; }
-  const isFuture = state.tab === 'future';
-  const items = isFuture ? buildFutureItems(list, state.events) : list.map(function (g) { return { type: 'card', g: g }; });
-  box.innerHTML = items.map(function (it) {
-    if (it.type === 'gap') return gapHtml(it);
-    const g = it.g, i = list.indexOf(g);
-    return '<article class="card ' + g.kind + (isFuture ? '' : ' history') + '">' +
-      '<div class="card-main"><div class="card-title">' + esc(g.name) + '</div>' +
-      '<div class="card-date">' + esc(g.spanText) + '</div>' +
-      '<div class="card-tags"><span class="tag ' + g.kind + '">' + esc(g.label) + (g.kind === 'holiday' ? ' 🍷' : ' 🕯️') + '</span></div>' +
-      (g.seq && isFuture ? '<div class="card-alert">⚡ רצף חג-שבת</div>' : '') + '</div>' +
-      (isFuture ? '<div class="card-actions">' +
-        '<button type="button" class="btn btn-edit" data-act="edit" data-i="' + i + '">שינוי שם</button>' +
-        '<button type="button" class="btn btn-del" data-act="del" data-i="' + i + '">מחיקה</button></div>' : '') +
-      '</article>';
-  }).join('');
+  const start = addDays(today, -3), end = addDays(today, CONFIG.HORIZON_DAYS);
+  try {
+    const items = await fetchHebcal(start, end, false);
+    state.hebItems = items; state.eventsStatus = 'ok';
+    lsSet(LS.EVENTS, { savedAt: Date.now(), start: start, end: end, items: items });
+  } catch (e) {
+    // בלי נתוני Hebcal לא בונים אירועים: רשימת "שבתות בלבד" בלי חגים הייתה מטעה בשקט
+    if (cache && Array.isArray(cache.items)) { state.hebItems = cache.items; state.eventsStatus = 'stale'; }
+    else state.eventsStatus = 'error';
+  }
 }
 
+/* ---------- רשת: GAS ---------- */
+async function gasCall(url, options) {
+  if (!CONFIG.GAS_URL) return { kind: 'config' };
+  let text;
+  try {
+    const res = await fetch(url, options);
+    text = await res.text();
+  } catch (e) { return { kind: 'network' }; }
+  return parseServerResponse(text, CONFIG.SERVER_VERSION);
+}
+function gasGet() { return gasCall(CONFIG.GAS_URL + (CONFIG.GAS_URL.indexOf('?') < 0 ? '?' : '&') + 'v=3', {}); }
+function gasPost(payload) {
+  // text/plain: בלי בקשת preflight מול GAS
+  return gasCall(CONFIG.GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
+}
+function errText(kind) { return kind === 'config' ? STR.errConfig : kind === 'deploy' ? STR.errDeploy : kind === 'old' ? STR.errOld : STR.errNet; }
+// קריאה במקביל משתפת את הקריאה שכבר בדרך. fresh: אחרי כתיבה, קריאה שנשלחה לפניה לא מספיקה.
+function loadRegs(fresh) {
+  if (state.regsInflight && !fresh) return state.regsInflight;
+  const before = state.regsInflight || Promise.resolve();
+  state.lastRegsFetch = Date.now();
+  const p = before.then(fetchRegs, fetchRegs).finally(function () {
+    if (state.regsInflight === p) state.regsInflight = null;
+    state.lastRegsFetch = Date.now();
+  });
+  state.regsInflight = p;
+  return p;
+}
+// כשל לא מוחק את מה שכבר מוצג
+async function fetchRegs() {
+  const r = await gasGet();
+  if (r.kind === 'ok' && r.data.status === 'success' && Array.isArray(r.data.data)) {
+    state.rows = r.data.data; state.regsStatus = 'ok'; state.regsError = '';
+    lsSet(LS.REGS, { savedAt: Date.now(), rows: state.rows });
+    $('serverVer').textContent = STR.server(r.data.ver);
+    return true;
+  }
+  // שגיאה שהשרת מחזיר (למשל חסרה כותרת: יש להריץ migrateSheet) מוצגת כלשונה
+  if (r.kind === 'ok' && r.data.status === 'error') { state.regsStatus = 'error'; state.regsError = r.data.message || STR.errNet; return false; }
+  const kind = r.kind === 'ok' ? 'invalid' : r.kind;
+  const soft = kind === 'network' || kind === 'invalid';
+  if (soft && state.rows.length) { state.regsStatus = 'cached'; return false; }
+  const cached = lsGet(LS.REGS);
+  if (soft && cached && Array.isArray(cached.rows)) { state.rows = cached.rows; state.regsStatus = 'cached'; return false; }
+  state.regsStatus = 'error'; state.regsError = errText(kind);
+  return false;
+}
+
+/* ---------- חישוב ורינדור ---------- */
+function eventsReady() { return state.eventsStatus === 'ok' || state.eventsStatus === 'stale'; }
+function recompute() {
+  state.today = todayStr();
+  state.events = eventsReady() ? buildEvents(state.hebItems, state.today, addDays(state.today, CONFIG.HORIZON_DAYS), CONFIG.EXCLUDED_YOMTOV_TITLES) : [];
+  // אירוע שנבחר וחלף הזמן שלו יוצא מהבחירה
+  Array.from(state.selectedKeys).forEach(function (k) { if (!eventByKey(k)) state.selectedKeys.delete(k); });
+  const g = groupRegistrations(state.rows, state.events, state.today);
+  applyParasha(g.history, state.parashaMap);
+  state.groups = g;
+  state.items = buildFutureItems(g.future, state.events);
+}
+function eventByKey(key) { return state.events.find(function (e) { return e.key === key; }); }
+function stateBlock(text, isError, onRetry) {
+  return h('div', { class: 'empty' + (isError ? ' is-error' : '') }, [
+    h('p', { text: text, role: isError ? 'alert' : null }),
+    onRetry ? h('button', { type: 'button', class: 'btn btn-retry', text: STR.retry, onclick: onRetry }) : null
+  ]);
+}
+function updateNotice() {
+  $('notice').textContent = state.regsStatus === 'cached' || state.eventsStatus === 'stale' ? STR.cached : '';
+}
+function renderAll() { renderPicker(); renderLists(); renderNames(); renderFormMode(); updateNotice(); }
+
+// אירוע מסומן לעולם לא מוסתר: "צמצם" לא מסתיר בחירה שתישלח
+function ensureShown() {
+  let last = -1;
+  state.events.forEach(function (e, i) { if (state.selectedKeys.has(e.key)) last = i; });
+  if (last >= 0) state.shown = Math.max(state.shown, last + 1);
+}
+// force: נבנה מחדש גם כשהאירועים לא השתנו. בלי force רענון ברקע לא מאבד פוקוס ובחירה.
+function renderPicker(force) {
+  const sig = [state.eventsStatus, state.shown, state.editing ? 1 : 0,
+    state.events.map(function (e) { return e.key + e.label + e.dateText + e.seq; }).join(',')].join('~');
+  if (!force && sig === state.pickerSig) return;
+  state.pickerSig = sig;
+  const box = $('eventPicker');
+  const active = document.activeElement;
+  const focusId = active && active.id;
+  const focusKey = active && active.name === 'ev' && box.contains(active) ? active.value : null;
+  box.replaceChildren();
+  $('moreRow').hidden = true;
+  if (state.eventsStatus === 'loading') { box.appendChild(stateBlock(STR.loadingEvents, false, null)); return; }
+  if (state.eventsStatus === 'error') { box.appendChild(stateBlock(STR.eventsErr, true, function () { refreshAll(true); })); return; }
+  ensureShown();
+  const editing = !!state.editing;
+  state.events.slice(0, state.shown).forEach(function (ev) {
+    const on = state.selectedKeys.has(ev.key);
+    const dateId = 'evd-' + ev.key;
+    const input = h('input', { type: editing ? 'radio' : 'checkbox', class: 'event-check', name: 'ev', value: ev.key, 'aria-describedby': dateId });
+    input.checked = on;
+    box.appendChild(h('label', { class: 'event ' + ev.kind + (on ? ' checked' : '') }, [
+      input,
+      h('span', { class: 'event-body' }, [
+        h('span', { class: 'event-title', text: ev.label }),
+        h('span', { class: 'event-date', id: dateId, text: ev.dateText }),
+        ev.seq ? h('span', { class: 'event-seq', text: STR.seq }) : null
+      ])
+    ]));
+  });
+  // "הצג עוד" מימין, "צמצם" משמאלו. צמצם מופיע רק אחרי שהרשימה הורחבה.
+  const total = state.events.length;
+  const canMore = state.shown < total;
+  const canLess = total > CONFIG.INITIAL_EVENTS_SHOWN && state.shown > CONFIG.INITIAL_EVENTS_SHOWN;
+  $('moreBtn').hidden = !canMore;
+  $('lessBtn').hidden = !canLess;
+  $('moreRow').hidden = !(canMore || canLess);
+  if (focusKey) { const again = box.querySelector('input[value="' + focusKey + '"]'); if (again) again.focus(); }
+  else if (focusId === 'moreBtn' && !canMore && canLess) $('lessBtn').focus();
+  else if (focusId === 'lessBtn' && !canLess && canMore) $('moreBtn').focus();
+}
+function renderFormMode() {
+  const ed = state.editing;
+  $('formCard').classList.toggle('edit-mode', !!ed);
+  $('editBanner').hidden = !ed;
+  $('editBanner').textContent = ed ? STR.editBanner(ed) : '';
+  $('cancelBtn').hidden = !ed;
+  $('pickerHint').hidden = !!ed;
+  if (!state.busy) $('submitBtn').textContent = ed ? STR.update : STR.submit;
+}
 function renderNames() {
-  const names = Array.from(new Set(state.rows.map(function (r) { return normalizeName(r.name); }).filter(Boolean)))
-    .sort(function (a, b) { return a.localeCompare(b, 'he'); });
-  $('nameList').innerHTML = names.map(function (n) { return '<option value="' + esc(n) + '"></option>'; }).join('');
+  const names = nameSuggestions(state.rows);
+  const sig = names.join('|');
+  if (sig === state.namesSig) return;
+  state.namesSig = sig;
+  $('nameList').replaceChildren.apply($('nameList'), names.map(function (n) { return h('option', { value: n }); }));
 }
 
-function render() { renderPicker(); renderCards(); renderNames(); }
-
-async function refreshEvents() {
-  try {
-    const items = await fetchEventItems(state.today);
-    state.items = items; state.eventsError = false;
-    writeCache(LS_EVENTS, { fetchedAt: Date.now(), from: state.today, items: items });
-  } catch (e) {
-    console.error('Hebcal', e);
-    state.eventsError = true; // אם יש מטמון ישן ממשיכים איתו
+function regCard(g, past) {
+  const actions = !past && !g.readonly ? h('div', { class: 'card-actions' }, [
+    h('button', { type: 'button', class: 'btn btn-edit', text: STR.edit, 'aria-label': STR.edit + ': ' + g.name,
+      data: { gid: g.key + '|' + g.name }, disabled: state.busy, onclick: function () { startEdit(g); } }),
+    h('button', { type: 'button', class: 'btn btn-del', text: STR.del, 'aria-label': STR.del + ': ' + g.name,
+      data: { gid: g.key + '|' + g.name }, disabled: state.busy, onclick: function (e) { openDelete(g, e.currentTarget); } })
+  ]) : null;
+  return h('article', { class: 'card ' + g.kind + (past ? ' history' : '') }, [
+    h('div', { class: 'card-main' }, [
+      h('h3', { class: 'card-title', text: g.name }),
+      h('div', { class: 'card-date', text: g.spanText }),
+      h('div', { class: 'card-tags' }, [h('span', { class: 'tag ' + g.kind, text: g.label + (g.kind === 'holiday' ? ' 🍷' : ' 🕯️') })]),
+      g.seq && !past ? h('div', { class: 'card-alert', text: STR.seq }) : null
+    ]),
+    actions
+  ]);
+}
+function gapBlock(events) {
+  return h('section', { class: 'gap', 'aria-label': STR.gapTitle(events.length).replace('⚠️ ', '') }, [
+    h('div', { class: 'gap-title', text: STR.gapTitle(events.length) }),
+    h('ul', { class: 'gap-list' }, events.map(function (ev) {
+      return h('li', { class: 'gap-item' }, [
+        h('span', { class: 'gap-info' }, [h('span', { class: 'gap-name', text: ev.label }), h('span', { class: 'gap-date', text: ev.dateText })]),
+        h('button', { type: 'button', class: 'btn btn-reg', text: STR.signup, 'aria-label': STR.signup + ': ' + ev.label,
+          disabled: state.busy, onclick: function () { pickFromGap(ev.key); } })
+      ]);
+    }))
+  ]);
+}
+function renderLists() {
+  const fut = $('panel-future'), past = $('panel-history');
+  // שמירת הפוקוס על כפתור בכרטיס (עריכה/מחיקה) לאורך רענון ברקע
+  const a = document.activeElement;
+  const keep = a && a.dataset && a.dataset.gid && fut.contains(a) ? { gid: a.dataset.gid, cls: a.classList.contains('btn-del') ? '.btn-del' : '.btn-edit' } : null;
+  fut.replaceChildren(); past.replaceChildren();
+  if (state.regsStatus === 'error') {
+    [fut, past].forEach(function (p) { p.appendChild(stateBlock(STR.regsErr(state.regsError), true, function () { refreshAll(true); })); });
+  } else if (state.regsStatus === 'loading') {
+    [fut, past].forEach(function (p) { p.appendChild(stateBlock(STR.loadingRegs, false, null)); });
+  } else {
+    if (!state.items.length) fut.appendChild(stateBlock(STR.empty, false, null));
+    state.items.forEach(function (it) { fut.appendChild(it.type === 'gap' ? gapBlock(it.events) : regCard(it.g, false)); });
+    if (!state.groups.history.length) past.appendChild(stateBlock(STR.empty, false, null));
+    state.groups.history.forEach(function (g) { past.appendChild(regCard(g, true)); });
   }
-  rebuild();
-}
-async function refreshRegs() {
-  try {
-    state.rows = await getRegistrations();
-    state.regsError = ''; state.regsLoaded = true; state.lastRegsFetch = Date.now();
-    writeCache(LS_REGS, state.rows);
-  } catch (e) {
-    console.error('GAS', e);
-    state.regsError = e.message || 'שגיאה';
+  if (keep) {
+    const again = Array.prototype.find.call(fut.querySelectorAll(keep.cls + '[data-gid]'), function (b) { return b.dataset.gid === keep.gid; });
+    if (again) again.focus();
   }
-  rebuild();
 }
 
+/* ---------- לשוניות ---------- */
+function setTab(name, focus) {
+  state.tab = name;
+  ['future', 'history'].forEach(function (t) {
+    const sel = t === name;
+    $('tab-' + t).setAttribute('aria-selected', sel ? 'true' : 'false');
+    $('tab-' + t).tabIndex = sel ? 0 : -1;
+    $('panel-' + t).hidden = !sel;
+  });
+  if (focus) $('tab-' + name).focus();
+}
+
+/* ---------- בורר, הרשמה ועריכה ---------- */
+function onPickerChange(e) {
+  const input = e.target;
+  if (!input || input.name !== 'ev') return;
+  if (input.type === 'radio') state.selectedKeys = new Set([input.value]);
+  else if (input.checked) state.selectedKeys.add(input.value);
+  else state.selectedKeys.delete(input.value);
+  document.querySelectorAll('#eventPicker .event').forEach(function (lab) { lab.classList.toggle('checked', lab.querySelector('input').checked); });
+  setMsg('');
+}
 function resetForm() {
-  state.editing = null; state.selected.clear();
-  $('regForm').reset();
-  $('formCard').classList.remove('edit-mode');
-  $('editBanner').hidden = true;
-  $('cancelBtn').hidden = true;
-  $('submitBtn').textContent = 'אישור הרשמה';
-  setMsg('');
-  render();
+  $('name').value = '';
+  state.selectedKeys = new Set();
+  state.editing = null;
+  state.shown = CONFIG.INITIAL_EVENTS_SHOWN; // אחרי שליחה או ביטול הרשימה חוזרת להיות קצרה
 }
-
 function startEdit(g) {
-  state.editing = g;
-  state.selected.clear();
+  if (state.busy) return; // שליחה בדרך: לא מחליפים את מצב הטופס באמצע
+  clearFormMessages();
+  state.editing = { ids: g.ids.slice(), name: g.name, key: g.key, label: g.label, trigger: g.key + '|' + g.name };
+  state.selectedKeys = new Set(eventByKey(g.key) ? [g.key] : []);
   $('name').value = g.name;
-  $('formCard').classList.add('edit-mode');
-  $('editBanner').textContent = 'מצב עריכה: שינוי שם בהרשמה ל-' + g.label + '. לשינוי המועד, מחקו והירשמו מחדש.';
-  $('editBanner').hidden = false;
-  $('cancelBtn').hidden = false;
-  $('submitBtn').textContent = 'עדכון שם';
-  setMsg('');
-  renderPicker();
-  $('formCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  $('name').focus();
+  renderPicker(true); renderFormMode();
+  scrollToEl($('formCard'));
+  $('name').focus({ preventScroll: true });
 }
-
-function friendlyError(e) {
-  if (e && e.message === 'NON_JSON') return 'השרת החזיר תשובה לא תקינה. יש לוודא שהפריסה ב-Google Apps Script מוגדרת לגישה "Anyone".';
-  return 'שגיאת תקשורת. בדקו חיבור לאינטרנט ונסו שוב.';
-}
-
-async function runAction(payload, okText, where) {
-  if (state.busy) return null;
-  state.busy = true;
-  $('submitBtn').disabled = true;
-  say(where === 'toast' ? 'מוחק...' : 'שולח...', 'info', where);
-  try {
-    const data = await postJson(payload);
-    if (!data || data.ver !== CONFIG.SERVER_VERSION) {
-      // תשובה בלי מספר גרסה = הפריסה ב-Apps Script עדיין מריצה קוד ישן
-      say('השרת עדיין בגרסה ישנה. מנהל האפליקציה צריך לעדכן את הפריסה ב-Apps Script (פריסה > ניהול פריסות > גרסה חדשה).', 'error', where);
-      return null;
-    }
-    if (data.status === 'success') { say(okText || 'נשמר', 'ok', where); return data; }
-    say(data.message || 'לא ניתן לשמור', 'error', where);
-    return data;
-  } catch (e) {
-    say(friendlyError(e), 'error', where);
-    return null;
-  } finally {
-    state.busy = false;
-    $('submitBtn').disabled = false;
+function cancelEdit(restoreFocus) {
+  if (state.busy) return;
+  const trigger = state.editing && state.editing.trigger;
+  resetForm(); clearFormMessages();
+  renderPicker(true); renderFormMode();
+  if (restoreFocus && trigger) {
+    const btn = Array.prototype.find.call(document.querySelectorAll('.btn-edit[data-gid]'), function (b) { return b.dataset.gid === trigger; });
+    if (btn) btn.focus();
   }
 }
-
+// "הירשמו" בשורת מועדים ריקים: מסמן את המועד בטופס (ומרחיב את הרשימה אם צריך) וגולל אליו
+function pickFromGap(key) {
+  if (state.busy) return;
+  if (state.editing) cancelEdit(false);
+  const ev = eventByKey(key);
+  if (!ev) return;
+  state.selectedKeys.add(key);
+  const idx = state.events.indexOf(ev);
+  state.shown = Math.max(state.shown, idx + 1);
+  renderPicker(true);
+  setMsg(STR.picked(ev.label), 'info');
+  scrollToEl($('formCard'));
+  const name = $('name');
+  if (!name.value.trim()) name.focus({ preventScroll: true });
+  else { const box = document.querySelector('#eventPicker input[value="' + key + '"]'); if (box) box.focus({ preventScroll: true }); }
+}
+// בזמן שליחה: כפתור השליחה נעול, וכפתורי הרשימה (עריכה, מחיקה, הירשמו) לא פועלים
+function setBusy(on, label) {
+  state.busy = on;
+  $('submitBtn').disabled = on;
+  $('submitBtn').classList.toggle('is-busy', on && !!label);
+  if (on && label) $('submitBtn').textContent = label;
+  $('regForm').setAttribute('aria-busy', on ? 'true' : 'false');
+  document.querySelectorAll('.cards-list .btn').forEach(function (b) { if (!b.classList.contains('btn-retry')) b.disabled = on; });
+  if (!on) renderFormMode();
+}
 async function onSubmit(e) {
   e.preventDefault();
   if (state.busy) return;
-  const name = normalizeName($('name').value);
-  if (!name) { setMsg('נא להזין שם משפחה.', 'error'); $('name').focus(); return; }
-
-  if (state.editing) {
-    const g = state.editing;
-    const data = await runAction({ action: 'rename', ids: g.ids, name: name }, 'השם עודכן');
-    if (data && data.status === 'success') { resetForm(); setMsg('השם עודכן', 'ok'); await refreshRegs(); render(); }
-    return;
-  }
-
-  const chosen = state.events.filter(function (ev) { return state.selected.has(ev.key); });
-  if (!chosen.length) { setMsg('נא לסמן לפחות שבת או חג אחד.', 'error'); return; }
-
-  const taken = new Set(state.rows.map(function (r) { return normalizeName(r.name).toLowerCase() + '|' + String(r.date).slice(0, 10); }));
-  const entries = [];
-  chosen.forEach(function (ev) {
-    ev.days.forEach(function (d) { entries.push({ date: d, eventKey: ev.key, eventName: ev.label }); });
-  });
-  if (entries.every(function (en) { return taken.has(name.toLowerCase() + '|' + en.date); })) {
-    setMsg('ההרשמה של ' + name + ' כבר קיימת במועדים שסומנו.', 'error');
-    return;
-  }
-
-  const data = await runAction({ action: 'register', name: name, entries: entries }, 'ההרשמה התקבלה');
-  if (data && data.status === 'success') {
-    showShare(name, chosen);
-    const extra = data.skipped && data.skipped.length ? ' (' + data.skipped.length + ' ימים כבר היו רשומים)' : '';
-    state.shown = CONFIG.INITIAL_EVENTS_SHOWN; // אחרי רישום מוצלח הרשימה חוזרת להיות קצרה
+  clearFormMessages();
+  const name = normalizeName($('name').value).slice(0, CONFIG.MAX_NAME).trim();
+  if (!name) { setMsg(STR.noName, 'error'); $('name').focus(); return; }
+  const entries = buildEntries(state.events, state.selectedKeys);
+  if (!entries.length) { setMsg(STR.noEvent, 'error'); return; }
+  if (entries.length > CONFIG.MAX_ENTRIES) { setMsg(STR.tooMany, 'error'); return; }
+  const editing = state.editing;
+  if (editing && isEditUnchanged(editing, name, state.selectedKeys)) { setMsg(STR.noChange, 'info'); return; }
+  if (!editing && isFullDuplicate(state.rows, name, entries)) { setMsg(STR.dup(name), 'error'); return; }
+  const chosen = state.events.filter(function (ev) { return state.selectedKeys.has(ev.key); });
+  setBusy(true, STR.sending);
+  const r = await gasPost(editing ? { action: 'edit', ids: editing.ids, name: name, entries: entries } : { action: 'register', name: name, entries: entries });
+  setBusy(false);
+  if (r.kind !== 'ok') { setMsg(errText(r.kind), 'error'); return; }
+  const d = r.data;
+  if (d.status === 'success') {
+    const skipped = d.skipped || [];
     resetForm();
-    setMsg('ההרשמה התקבלה' + extra, 'ok');
-    await refreshRegs(); render();
-  } else if (data && data.status === 'duplicate') {
-    await refreshRegs(); render();
+    renderPicker(true); renderFormMode();
+    setMsg(skipped.length ? STR.partial(skipped.length) : editing ? STR.updated : STR.saved, 'ok');
+    // בהודעה רק אירועים שנרשם להם לפחות יום אחד (ימים שכבר היו רשומים לא נכללים)
+    const shared = chosen.filter(function (ev) { return ev.days.some(function (day) { return skipped.indexOf(day) < 0; }); });
+    $('shareTitle').textContent = editing ? STR.shareUpdated : STR.shareSaved;
+    $('whatsappLink').href = 'https://wa.me/?text=' + encodeURIComponent(buildShareMessage(name, shared, appUrl()));
+    $('shareBox').hidden = false;
+    await loadRegs(true); recompute(); renderAll(); resolveHistoryParasha();
+    return;
   }
+  setMsg(d.message || STR.errNet, 'error');
+  if (editing && d.status === 'error' && /לא נמצאה/.test(d.message || '')) {
+    // ההרשמה נמחקה או שונתה על ידי אחר: יוצאים ממצב עריכה (השם והבחירה נשארים) ומרעננים
+    state.editing = null; renderPicker(true); renderFormMode();
+  }
+  if (d.status === 'duplicate' || editing) { await loadRegs(true); recompute(); renderLists(); renderNames(); updateNotice(); }
 }
 
-function showShare(name, chosen) {
-  const url = location.origin + location.pathname;
-  $('whatsappLink').href = 'https://wa.me/?text=' + encodeURIComponent(buildShareMessage(name, chosen, url));
-  $('shareBox').hidden = false;
+/* ---------- מחיקה ---------- */
+function openDelete(g, trigger) {
+  if (state.busy) return; // שליחת טופס בדרך: לא פותחים חלון שאי אפשר לאשר בו
+  state.deleting = g; state.deleteTrigger = trigger;
+  $('delErr').textContent = '';
+  $('delMsg').textContent = STR.delMsg(g);
+  $('delConfirm').disabled = false; $('delCancel').disabled = false;
+  $('delDialog').showModal();
+}
+async function confirmDelete() {
+  const g = state.deleting;
+  if (!g || state.busy) return;
+  setBusy(true); $('delConfirm').disabled = true; $('delCancel').disabled = true; $('delErr').textContent = '';
+  $('delConfirm').classList.add('is-busy');
+  const r = await gasPost({ action: 'delete', ids: g.ids });
+  setBusy(false); $('delConfirm').disabled = false; $('delCancel').disabled = false;
+  $('delConfirm').classList.remove('is-busy');
+  if (r.kind !== 'ok') { $('delErr').textContent = errText(r.kind); return; }
+  // "לא נמצאה" = מישהו אחר כבר מחק: נחשב הצלחה
+  if (r.data.status === 'success' || (r.data.status === 'error' && /לא נמצאה/.test(r.data.message || ''))) {
+    state.deleteTrigger = null; // הכפתור כבר לא יהיה קיים
+    $('delDialog').close();
+    toast(STR.deleted, 'ok');
+    if (state.editing && state.editing.ids.some(function (id) { return g.ids.indexOf(id) >= 0; })) { resetForm(); clearFormMessages(); renderPicker(true); renderFormMode(); }
+    await loadRegs(true); recompute(); renderAll(); resolveHistoryParasha();
+    $('tab-' + state.tab).focus();
+    return;
+  }
+  $('delErr').textContent = r.data.message || STR.errNet;
+}
+function onDeleteClosed() {
+  const t = state.deleteTrigger;
+  state.deleting = null; state.deleteTrigger = null;
+  if (!t) return;
+  if (document.contains(t)) { t.focus(); return; }
+  // הרשימה רועננה ברקע בזמן שהחלון היה פתוח: מחפשים את הכפתור החדש של אותה הרשמה
+  const same = Array.prototype.find.call(document.querySelectorAll('.btn-del[data-gid]'), function (b) { return b.dataset.gid === t.dataset.gid; });
+  if (same) same.focus();
 }
 
-async function onDelete(g) {
-  if (!window.confirm('למחוק את ההרשמה של ' + g.name + ' (' + g.label + ')?')) return;
-  const data = await runAction({ action: 'delete', ids: g.ids }, 'ההרשמה נמחקה', 'toast');
-  if (data && data.status === 'success') { await refreshRegs(); render(); }
+/* ---------- פרשות להיסטוריה ישנה: טווח אחד ומטמון קבוע ---------- */
+async function resolveHistoryParasha() {
+  if (state.parashaBusy || state.regsStatus === 'error') return;
+  const missing = missingParashaSaturdays(state.groups.history, state.parashaMap);
+  if (!missing.length) return;
+  state.parashaBusy = true;
+  try {
+    const start = missing[0], end = missing[missing.length - 1];
+    const items = await fetchHebcal(start, end, true);
+    items.forEach(function (it) { if (it.hebrew) state.parashaMap.set(it.date, it.hebrew); });
+    // שבת שהוחזרה בלי פרשה (למשל שבת חג) נשמרת כריקה, כדי לא לשאול שוב
+    for (let d = start; d <= end; d = addDays(d, 7)) if (!state.parashaMap.has(d)) state.parashaMap.set(d, '');
+    const obj = {};
+    state.parashaMap.forEach(function (v, k) { obj[k] = v; });
+    lsSet(LS.PARASHA, obj);
+    applyParasha(state.groups.history, state.parashaMap);
+    renderLists();
+  } catch (e) { /* נשארת התווית "שבת" */ }
+  state.parashaBusy = false;
+}
+
+/* ---------- טעינה, רענון והתקנה ---------- */
+async function refreshAll(showLoading) {
+  if (showLoading) {
+    if (!state.rows.length) state.regsStatus = 'loading';
+    if (!state.hebItems.length) state.eventsStatus = 'loading';
+    recompute(); renderAll();
+  }
+  await Promise.all([loadEvents(), loadRegs()]);
+  recompute(); renderAll();
+  resolveHistoryParasha();
+}
+// חזרה לאפליקציה אחרי יותר מדקה: רענון שקט. גם אירועים מהמטמון (כשל רשת) או יום שהתחלף נטענים מחדש.
+async function silentRefresh() {
+  const dayChanged = todayStr() !== state.today;
+  if (!dayChanged && Date.now() - state.lastRegsFetch <= CONFIG.REGS_REFRESH_AFTER_MS) return;
+  const retryEvents = dayChanged || state.eventsStatus !== 'ok';
+  if (retryEvents) await loadEvents();
+  await loadRegs();
+  recompute();
+  if (retryEvents) renderAll(); else { renderLists(); renderNames(); updateNotice(); }
+  resolveHistoryParasha();
+}
+function isStandalone() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+}
+function bindInstall() {
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    state.deferredInstall = e;
+    if (!isStandalone()) $('installRow').hidden = false;
+  });
+  window.addEventListener('appinstalled', function () { state.deferredInstall = null; $('installRow').hidden = true; });
+  $('installBtn').addEventListener('click', async function () {
+    const p = state.deferredInstall;
+    if (!p) return;
+    p.prompt();
+    try { await p.userChoice; } catch (e) { /* בוטל */ }
+    state.deferredInstall = null; $('installRow').hidden = true;
+  });
 }
 
 function bindUI() {
   $('regForm').addEventListener('submit', onSubmit);
-  $('cancelBtn').addEventListener('click', resetForm);
-  $('moreBtn').addEventListener('click', function () { state.shown += CONFIG.MORE_STEP; renderPicker(); });
+  $('eventPicker').addEventListener('change', onPickerChange);
+  $('cancelBtn').addEventListener('click', function () { cancelEdit(true); });
+  $('moreBtn').addEventListener('click', function () { state.shown += CONFIG.MORE_STEP; renderPicker(true); });
   $('lessBtn').addEventListener('click', function () {
-    state.shown = CONFIG.INITIAL_EVENTS_SHOWN; renderPicker();
-    $('pickerGroup').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    state.shown = CONFIG.INITIAL_EVENTS_SHOWN; ensureShown(); renderPicker(true);
+    $('pickerGroup').scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
   });
   $('toast').addEventListener('click', function () { $('toast').hidden = true; });
-  $('eventPicker').addEventListener('change', function (e) {
-    const t = e.target;
-    if (!t.classList || !t.classList.contains('event-check')) return;
-    if (t.checked) state.selected.add(t.getAttribute('data-key')); else state.selected.delete(t.getAttribute('data-key'));
-    const lbl = t.closest('label'); if (lbl) lbl.classList.toggle('checked', t.checked);
-    setMsg('');
-  });
-  $('eventPicker').addEventListener('click', function (e) {
-    if (e.target && e.target.id === 'retryEvents') { refreshEvents().then(render); }
-  });
-  $('cardsContainer').addEventListener('click', function (e) {
-    const b = e.target.closest ? e.target.closest('button[data-act]') : null;
-    if (!b) return;
-    if (b.getAttribute('data-act') === 'reg') { selectEvent(b.getAttribute('data-key')); return; }
-    const g = state.view.future[Number(b.getAttribute('data-i'))];
-    if (!g) return;
-    if (b.getAttribute('data-act') === 'edit') startEdit(g); else onDelete(g);
-  });
-  document.querySelectorAll('.tab-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      state.tab = btn.getAttribute('data-tab');
-      document.querySelectorAll('.tab-btn').forEach(function (b) {
-        const on = b === btn; b.classList.toggle('active', on); b.setAttribute('aria-selected', on ? 'true' : 'false');
-      });
-      renderCards();
+  $('delConfirm').addEventListener('click', confirmDelete);
+  $('delCancel').addEventListener('click', function () { if (!state.busy) $('delDialog').close(); });
+  $('delDialog').addEventListener('close', onDeleteClosed);
+  // Escape בזמן מחיקה בדרך היה סוגר את החלון ומעלים שגיאה אפשרית
+  $('delDialog').addEventListener('cancel', function (e) { if (state.busy) e.preventDefault(); });
+  ['future', 'history'].forEach(function (t) {
+    $('tab-' + t).addEventListener('click', function () { setTab(t, false); });
+    $('tab-' + t).addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); setTab(t === 'future' ? 'history' : 'future', true); }
+      else if (e.key === 'Home') { e.preventDefault(); setTab('future', true); }
+      else if (e.key === 'End') { e.preventDefault(); setTab('history', true); }
     });
   });
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && Date.now() - state.lastRegsFetch > 60000) refreshRegs().then(render);
-  });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') silentRefresh(); });
+  bindInstall();
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () { /* בלי SW האפליקציה עובדת */ }); });
+  }
 }
 
-async function init() {
-  state.today = toDateStr(new Date());
+function init() {
+  $('clientVer').textContent = STR.version(CONFIG.CLIENT_VERSION);
   bindUI();
-  const ec = readCache(LS_EVENTS);
-  if (ec && Array.isArray(ec.items)) state.items = ec.items;
-  const rc = readCache(LS_REGS);
-  if (Array.isArray(rc)) { state.rows = rc; state.regsLoaded = true; }
-  rebuild();
-  render();                                   // הצגה מיידית מהמטמון
-  const tasks = [refreshRegs()];
-  if (!eventsCacheIsFresh(ec, state.today)) tasks.push(refreshEvents());
-  await Promise.allSettled(tasks);
-  render();
+  // הצגה מיידית מהמטמון, ואז רשת ברקע
+  const ec = lsGet(LS.EVENTS), rc = lsGet(LS.REGS), pc = lsGet(LS.PARASHA);
+  if (ec && Array.isArray(ec.items) && ec.items.length) { state.hebItems = ec.items; state.eventsStatus = 'stale'; }
+  if (rc && Array.isArray(rc.rows)) { state.rows = rc.rows; state.regsStatus = 'cached'; }
+  if (pc && typeof pc === 'object') state.parashaMap = new Map(Object.keys(pc).map(function (k) { return [k, pc[k]]; }));
+  recompute(); renderAll();
+  // בטעינה הראשונה עוד אין "אין חיבור": ההודעה תופיע רק אם הרשת נכשלה
+  $('notice').textContent = '';
+  refreshAll(false);
 }
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { buildEvents: buildEvents, buildFutureItems: buildFutureItems, groupRegistrations: groupRegistrations, normalizeName: normalizeName,
-    formatDays: formatDays, buildShareMessage: buildShareMessage, addDays: addDays, esc: esc, toDateStr: toDateStr,
-    eventsCacheIsFresh: eventsCacheIsFresh, CONFIG: CONFIG };
-}
-if (typeof document !== 'undefined') {
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
-}
+init();
