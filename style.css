@@ -44,7 +44,7 @@ h1 { color: var(--olive); font-size: 1.45rem; margin: 0; line-height: 1.25; }
   background: linear-gradient(to left, var(--olive), var(--terracotta));
 }
 .install-row { display: flex; justify-content: center; margin: 0 0 10px; }
-.btn-install { background: var(--card); color: var(--olive-dark); border: 2px solid var(--olive); }
+.btn.btn-install { background: var(--card); color: var(--olive-dark); border: 2px solid var(--olive); }
 
 /* טופס */
 .form-card {
