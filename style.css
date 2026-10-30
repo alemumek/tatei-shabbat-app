@@ -1,10 +1,13 @@
-/* שבת וחג אצל טטיי - style.css v2.4
-   עקרונות: גופן בסיס 18px, יעדי מגע 44px ומעלה, ניגודיות AA, מרווחים קומפקטיים כדי
-   שרשימת ההרשמות תופיע במסך הראשון, בלי תלות ב-hover. */
+/* שבת וחג אצל טטיי - style.css v3.0.0
+   הצבעים והגדלים של גרסה 2.4 נשמרים (זית וטרקוטה, גופן בסיס 18px, ניגודיות AA).
+   ליטוש בגרסה 3: יעדי מגע 48px בכל הכפתורים, צל עדין לכרטיסים, משוב לחיצה ומצב "שולח",
+   אייקון בהודעות (לא רק צבע), חלון מחיקה מעוצב והודעה צפה עם כניסה רכה. בלי תלות ב-hover. */
 :root {
   --olive: #556B2F;
   --olive-dark: #4A5E28;
-  --terracotta: #B24A25;   /* כהה יותר מ-#C85A32 (ניגודיות 5.4:1 מול לבן במקום 4.2:1) */
+  --olive-soft: #EEF3E4;
+  --terracotta: #B24A25; /* 5.4:1 מול לבן */
+  --terracotta-soft: #FBEDE6;
   --bg: #FDFBF7;
   --card: #FFFFFF;
   --text: #222222;
@@ -12,13 +15,18 @@
   --line: #D8D4CC;
   --warn-bg: #FFF3CD;
   --warn-text: #5C4400;
+  --danger: #9B1C1C;
+  --error: #B00020;
+  --wa: #167F3D;
+  --focus: #1D4ED8;
+  --shadow: 0 1px 2px rgba(34, 34, 34, 0.06), 0 2px 8px rgba(34, 34, 34, 0.06);
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
-  padding: 10px 12px 28px;
+  padding: 10px 12px calc(28px + env(safe-area-inset-bottom, 0px));
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Hebrew", Arial, sans-serif;
   font-size: 18px;
   line-height: 1.4;
@@ -26,21 +34,32 @@ body {
   color: var(--text);
 }
 .container { max-width: 600px; margin: 0 auto; }
-h1 { text-align: center; color: var(--olive); font-size: 1.45rem; margin: 2px 0 8px; line-height: 1.25; }
-.hearts { font-size: 1rem; }
+
+/* כותרת */
+.top { text-align: center; margin: 2px 0 10px; }
+h1 { color: var(--olive); font-size: 1.45rem; margin: 0; line-height: 1.25; }
+.hearts { font-size: 1rem; white-space: nowrap; }
+.top::after {
+  content: ""; display: block; width: 72px; height: 3px; margin: 6px auto 0; border-radius: 2px;
+  background: linear-gradient(to left, var(--olive), var(--terracotta));
+}
+.install-row { display: flex; justify-content: center; margin: 0 0 10px; }
+.btn-install { background: var(--card); color: var(--olive-dark); border: 2px solid var(--olive); }
 
 /* טופס */
 .form-card {
   background: var(--card);
   border: 2px solid var(--olive);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 12px;
   margin-bottom: 12px;
+  box-shadow: var(--shadow);
+  transition: border-color 150ms;
 }
 .form-card.edit-mode { border-color: var(--terracotta); }
 .edit-banner {
   background: var(--terracotta); color: #fff; font-weight: bold;
-  padding: 8px 10px; border-radius: 8px; margin-bottom: 10px;
+  padding: 8px 12px; border-radius: 10px; margin: 0 0 10px;
 }
 .form-group { margin: 0 0 10px; padding: 0; border: 0; min-width: 0; }
 label, legend { display: block; font-weight: bold; margin-bottom: 4px; padding: 0; }
@@ -49,25 +68,31 @@ legend small { font-size: clamp(0.72rem, 3.3vw, 0.85rem); font-weight: normal; c
 input[type="text"] {
   width: 100%; min-height: 48px; padding: 8px 12px;
   font-size: 1.05rem; font-family: inherit;
-  border: 2px solid #8A8A8A; border-radius: 8px; background: #fff; color: var(--text);
+  border: 2px solid #8A8A8A; border-radius: 10px; background: #fff; color: var(--text);
+  transition: border-color 150ms;
 }
-input[type="text"]:focus-visible, .btn:focus-visible, .tab-btn:focus-visible, .event input:focus-visible {
-  outline: 3px solid #1D4ED8; outline-offset: 2px;
-}
+input[type="text"]:focus { border-color: var(--olive); }
+input[type="text"]::placeholder { color: #767676; } /* 4.5:1 על לבן */
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 /* בורר מועדים */
 .event-list { display: flex; flex-direction: column; gap: 8px; }
 .event {
   display: flex; align-items: center; gap: 12px;
   min-height: 56px; padding: 6px 12px;
-  border: 2px solid var(--line); border-right-width: 6px; border-radius: 10px;
+  border: 2px solid var(--line); border-right-width: 6px; border-radius: 12px;
   background: #fff; cursor: pointer; font-weight: normal; margin: 0;
+  transition: background-color 150ms, border-color 150ms;
+  -webkit-tap-highlight-color: transparent;
 }
 .event.shabbat { border-right-color: var(--olive); }
 .event.holiday { border-right-color: var(--terracotta); }
-.event.checked { background: #EEF3E4; border-color: var(--olive); }
-.event.holiday.checked { background: #FBEDE6; border-color: var(--terracotta); }
-.event input { width: 28px; height: 28px; flex: none; margin: 0; accent-color: var(--olive); }
+.event:active { background: #F7F5F0; }
+.event.checked { background: var(--olive-soft); border-color: var(--olive); }
+.event.holiday.checked { background: var(--terracotta-soft); border-color: var(--terracotta); }
+.event:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+.event input { width: 28px; height: 28px; flex: none; margin: 0; accent-color: var(--olive); cursor: pointer; }
+.event input:focus-visible { outline: none; } /* הטבעת על כל השורה */
 .event.holiday input { accent-color: var(--terracotta); }
 .event-body { display: flex; flex-direction: column; gap: 0; min-width: 0; }
 .event-title { font-weight: bold; font-size: 1rem; }
@@ -78,82 +103,127 @@ input[type="text"]:focus-visible, .btn:focus-visible, .tab-btn:focus-visible, .e
 .btn {
   min-height: 48px; padding: 8px 16px; border: 0; border-radius: 10px;
   font: inherit; font-weight: bold; color: #fff; cursor: pointer; text-decoration: none;
-  display: inline-flex; align-items: center; justify-content: center; text-align: center;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-align: center;
+  transition: background-color 150ms, transform 80ms, opacity 150ms;
+  -webkit-tap-highlight-color: transparent;
 }
-.btn:disabled { opacity: 0.6; cursor: wait; }
+.btn:active:not(:disabled) { transform: scale(0.98); }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn.is-busy::after {
+  content: ""; width: 16px; height: 16px; flex: none; border-radius: 50%;
+  border: 2px solid currentColor; border-top-color: transparent; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 .btn-group { display: flex; gap: 10px; }
 .btn-group .btn { flex: 1; }
+.btn-group .btn-submit { flex: 2; } /* "עדכון הרשמה" נשאר בשורה אחת ליד "ביטול" גם ב-320px */
 .btn-submit { background: var(--olive); }
+.btn-submit:hover:not(:disabled) { background: var(--olive-dark); }
 .form-card.edit-mode .btn-submit { background: var(--terracotta); }
 .btn-cancel { background: #5F5F5F; }
 .more-row { display: flex; gap: 8px; margin-top: 8px; }
-.more-row .btn { flex: 1; min-height: 44px; padding: 4px 8px; background: #fff; border: 2px solid var(--olive); color: var(--olive-dark); }
+.more-row .btn { flex: 1; padding: 4px 8px; background: #fff; border: 2px solid var(--olive); color: var(--olive-dark); }
 .more-row .btn-less { border-color: #5F5F5F; color: #444; }
-.btn-whatsapp { background: #167F3D; width: 100%; }
-.link-btn { background: none; border: 0; padding: 0; font: inherit; color: #1D4ED8; text-decoration: underline; cursor: pointer; }
+.btn-whatsapp { background: var(--wa); width: 100%; }
+.btn-retry { background: var(--olive); margin-top: 8px; }
 
-.form-msg { margin: 0 0 8px; font-weight: bold; }
-.form-msg:empty { margin: 0; }
-.form-msg.error { color: #B00020; }
+/* הודעות: אייקון עגול לפני הטקסט, כדי שהמשמעות לא תהיה רק בצבע */
+.form-msg { margin: 0 0 8px; font-weight: bold; display: flex; align-items: flex-start; gap: 8px; }
+.form-msg:empty { display: none; }
+.form-msg::before {
+  flex: none; width: 1.3em; height: 1.3em; margin-top: 0.05em; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.85em; line-height: 1; color: #fff; background: var(--muted); content: "i";
+}
+.form-msg.error { color: var(--error); }
+.form-msg.error::before { content: "!"; background: var(--error); }
 .form-msg.ok { color: var(--olive-dark); }
+.form-msg.ok::before { content: "✓"; background: var(--olive); }
 .form-msg.info { color: var(--muted); }
-
+.notice {
+  margin: 0 0 10px; padding: 6px 12px; border-radius: 10px;
+  background: var(--warn-bg); color: var(--warn-text); font-weight: bold; font-size: 0.95rem; text-align: center;
+}
+.notice:empty { display: none; }
 .share-box {
-  background: #E8F5E9; border: 2px solid #167F3D; border-radius: 10px;
-  padding: 12px; margin-bottom: 12px; text-align: center;
+  background: #E8F5E9; border: 2px solid var(--wa); border-radius: 12px;
+  padding: 12px; margin-bottom: 12px; text-align: center; box-shadow: var(--shadow);
 }
 .share-title { margin: 0 0 8px; font-weight: bold; }
 
 /* לשוניות */
 .tabs { display: flex; border-bottom: 2px solid var(--line); margin-bottom: 8px; }
 .tab-btn {
-  flex: 1; min-height: 46px; background: none; border: 0; border-bottom: 4px solid transparent;
-  font: inherit; font-size: 1rem; color: var(--muted); cursor: pointer; padding: 6px;
+  flex: 1; min-height: 48px; background: none; border: 0; border-bottom: 4px solid transparent; margin-bottom: -2px;
+  font: inherit; font-size: clamp(0.9375rem, 4.6vw, 1rem); color: var(--muted); cursor: pointer; padding: 6px 4px;
+  transition: color 150ms, border-color 150ms;
 }
-.tab-btn.active { color: var(--olive-dark); font-weight: bold; border-bottom-color: var(--olive); }
+.tab-btn[aria-selected="true"] { flex: 1.25; color: var(--olive-dark); font-weight: bold; border-bottom-color: var(--olive); }
 
 /* כרטיסי הרשמה: טקסט מימין, פעולות בטור משמאל (חוסך גובה) */
 .cards-list { display: flex; flex-direction: column; gap: 8px; }
 .card {
   background: var(--card); border: 1px solid var(--line); border-right: 6px solid var(--olive);
-  border-radius: 12px; padding: 8px 10px;
+  border-radius: 12px; padding: 8px 10px; box-shadow: var(--shadow);
   display: flex; flex-direction: row; align-items: center; gap: 10px;
 }
 .card.holiday { border-right-color: var(--terracotta); }
-.card.history { background: #F6F4EF; border-right-color: #8A8A8A; }
+.card.history { background: #F6F4EF; border-right-color: #8A8A8A; box-shadow: none; }
 .card-main { flex: 1; min-width: 0; }
-.card-title { font-size: 1.1rem; font-weight: bold; overflow-wrap: anywhere; line-height: 1.25; }
+.card-title { font-size: 1.1rem; font-weight: bold; overflow-wrap: anywhere; line-height: 1.25; margin: 0; }
 .card-date { color: var(--muted); font-size: 0.92rem; }
 .card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .tag { display: inline-block; padding: 1px 10px; border-radius: 14px; font-size: 0.9rem; font-weight: bold; color: #fff; background: var(--olive); }
 .tag.holiday { background: var(--terracotta); }
 .card.history .tag { background: #5F5F5F; }
 .card-alert { margin-top: 4px; background: var(--warn-bg); color: var(--warn-text); padding: 2px 8px; border-radius: 6px; font-weight: bold; font-size: 0.9rem; display: inline-block; }
-.card-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
-.card-actions .btn { min-height: 44px; min-width: 84px; padding: 4px 10px; font-size: 0.95rem; }
+.card-actions { display: flex; flex-direction: column; gap: 8px; flex: none; }
+.card-actions .btn { min-width: 88px; padding: 4px 10px; font-size: 0.95rem; }
 .btn-edit { background: var(--olive); }
-.btn-del { background: #9B1C1C; }
+.btn-del { background: var(--danger); }
 
+/* מצבי טעינה, ריק ושגיאה */
 .empty { text-align: center; color: var(--muted); padding: 12px 0; margin: 0; }
-
-@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
-
-/* הודעה צפה בתחתית המסך (מחיקה וכד'), נשארת בטווח הראייה גם כשהטופס מחוץ למסך */
-.toast {
-  position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  max-width: 576px; margin: 0 auto; padding: 12px 14px; border-radius: 10px;
-  font-weight: bold; color: #fff; z-index: 50; box-shadow: 0 4px 14px rgba(0,0,0,0.3); cursor: pointer;
-}
-.toast.ok { background: #2E6B2E; }
-.toast.error { background: #9B1C1C; }
-.toast.info { background: #444; }
+.empty p { margin: 0; }
+.empty.is-error p { color: var(--error); font-weight: bold; }
+.empty.is-error p::before { content: "! "; }
 
 /* שורת מועדים בלי נרשמים (בין שתי הרשמות) */
 .gap { background: var(--warn-bg); border: 2px dashed #B58900; border-radius: 12px; padding: 8px 10px; color: var(--warn-text); }
 .gap-title { font-weight: bold; margin-bottom: 4px; }
-.gap-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.gap-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .gap-item { display: flex; align-items: center; gap: 10px; }
 .gap-info { flex: 1; min-width: 0; }
 .gap-name { display: block; font-weight: bold; }
 .gap-date { display: block; font-size: 0.9rem; }
-.gap .btn { min-height: 44px; min-width: 84px; padding: 4px 10px; font-size: 0.95rem; background: var(--olive); }
+.gap .btn { min-width: 88px; padding: 4px 10px; font-size: 0.95rem; background: var(--olive); }
+
+/* חלון מחיקה */
+.dialog {
+  width: min(420px, calc(100% - 32px)); padding: 16px; border: 0; border-radius: 14px;
+  background: var(--card); color: var(--text); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+.dialog::backdrop { background: rgba(34, 34, 34, 0.5); }
+.dialog h2 { margin: 0 0 8px; font-size: 1.2rem; color: var(--danger); }
+.dialog p { margin: 0 0 12px; }
+.dialog .form-msg { margin-bottom: 12px; }
+
+/* הודעה צפה בתחתית המסך, נשארת בטווח הראייה גם כשהטופס מחוץ למסך */
+.toast {
+  position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  max-width: 576px; margin: 0 auto; padding: 12px 14px; border-radius: 12px;
+  font-weight: bold; color: #fff; z-index: 50; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); cursor: pointer;
+  animation: toast-in 200ms ease-out;
+}
+.toast.ok { background: #2E6B2E; }
+.toast.ok::before { content: "✓ "; }
+.toast.error { background: var(--danger); }
+.toast.error::before { content: "! "; }
+@keyframes toast-in { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.foot { text-align: center; color: var(--muted); font-size: 0.9rem; margin-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+  .btn.is-busy::after { border-top-color: currentColor; opacity: 0.6; }
+}

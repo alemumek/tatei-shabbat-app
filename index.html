@@ -4,34 +4,45 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#556B2F">
+  <meta name="description" content="הרשמה לשבתות וחגים אצל טטיי">
   <title>שבת וחג אצל טטיי</title>
-  <link rel="stylesheet" href="style.css?v=2.4">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-apple.png">
+  <link rel="stylesheet" href="style.css?v=3.0.0">
 </head>
 <body>
 <main class="container">
-  <h1>שבת וחג אצל טטיי <span class="hearts" aria-hidden="true">💗💗💗</span></h1>
+  <header class="top">
+    <h1>שבת וחג אצל טטיי <span class="hearts" aria-hidden="true">💗💗💗</span></h1>
+  </header>
 
-  <!-- טופס הרשמה / שינוי שם -->
+  <div class="install-row" id="installRow" hidden>
+    <button type="button" class="btn btn-install" id="installBtn">הוספה למסך הבית</button>
+  </div>
+
+  <noscript><p class="empty">האפליקציה דורשת JavaScript.</p></noscript>
+
+  <!-- טופס הרשמה / עריכה -->
   <section class="form-card" id="formCard" aria-label="הרשמה">
-    <div class="edit-banner" id="editBanner" hidden></div>
+    <p class="edit-banner" id="editBanner" hidden></p>
     <form id="regForm" novalidate>
       <div class="form-group">
         <label for="name">שם מלא / משפחה</label>
         <input type="text" id="name" list="nameList" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="תמר ותומר">
         <datalist id="nameList"></datalist>
       </div>
-
       <fieldset class="form-group picker" id="pickerGroup">
-        <legend>בחירת שבת/חג, <small>אפשר לסמן כמה</small></legend>
-        <div class="event-list" id="eventPicker" aria-live="polite">טוען מועדים...</div>
+        <legend>בחירת שבת/חג<small id="pickerHint">, אפשר לסמן כמה</small></legend>
+        <div class="event-list" id="eventPicker"></div>
         <div class="more-row" id="moreRow" hidden>
           <button type="button" class="btn btn-more" id="moreBtn" hidden>הצג עוד מועדים</button>
           <button type="button" class="btn btn-less" id="lessBtn" hidden>צמצם מועדים</button>
         </div>
       </fieldset>
-
       <p class="form-msg" id="formMsg" role="status" aria-live="polite"></p>
-
+      <p class="form-msg error" id="formErr" role="alert"></p>
       <div class="btn-group">
         <button type="submit" class="btn btn-submit" id="submitBtn">אישור הרשמה</button>
         <button type="button" class="btn btn-cancel" id="cancelBtn" hidden>ביטול</button>
@@ -41,20 +52,36 @@
 
   <!-- שיתוף WhatsApp -->
   <section class="share-box" id="shareBox" hidden>
-    <p class="share-title">✨ ההרשמה התקבלה בהצלחה!</p>
+    <p class="share-title" id="shareTitle">✨ ההרשמה התקבלה בהצלחה!</p>
     <a href="#" id="whatsappLink" target="_blank" rel="noopener" class="btn btn-whatsapp">שיתוף בקבוצת ה-WhatsApp המשפחתית 📱</a>
   </section>
 
-  <!-- לשוניות -->
-  <div class="tabs" role="tablist">
-    <button type="button" class="tab-btn active" role="tab" aria-selected="true" data-tab="future">שבתות וחגים קרובים</button>
-    <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="history">שבתות וחגים שהיו</button>
-  </div>
+  <p class="notice" id="notice" role="status" aria-live="polite"></p>
 
-  <div class="cards-list" id="cardsContainer"></div>
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  <noscript><p class="empty">האפליקציה דורשת JavaScript.</p></noscript>
+  <!-- לשוניות -->
+  <div class="tabs" role="tablist" aria-label="הרשמות">
+    <button type="button" class="tab-btn" role="tab" id="tab-future" aria-selected="true" aria-controls="panel-future">שבתות וחגים קרובים</button>
+    <button type="button" class="tab-btn" role="tab" id="tab-history" aria-selected="false" aria-controls="panel-history" tabindex="-1">שבתות וחגים שהיו</button>
+  </div>
+  <div class="cards-list" id="panel-future" role="tabpanel" aria-labelledby="tab-future"></div>
+  <div class="cards-list" id="panel-history" role="tabpanel" aria-labelledby="tab-history" hidden></div>
+
+  <footer class="foot"><span id="clientVer"></span><span id="serverVer"></span></footer>
 </main>
-<script src="app.js?v=2.4" defer></script>
+
+<dialog class="dialog" id="delDialog" aria-labelledby="delTitle" aria-describedby="delMsg">
+  <h2 id="delTitle">מחיקת הרשמה</h2>
+  <p id="delMsg"></p>
+  <p class="form-msg error" id="delErr" role="alert"></p>
+  <div class="btn-group">
+    <button type="button" class="btn btn-del" id="delConfirm">מחיקה</button>
+    <button type="button" class="btn btn-cancel" id="delCancel">ביטול</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="logic.js?v=3.0.0"></script>
+<script src="app.js?v=3.0.0"></script>
 </body>
 </html>
